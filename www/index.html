@@ -87,6 +87,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .hour .t { font-size: .75rem; color: var(--muted); }
 .hour .temp { font: 600 1rem var(--display); }
 .hour .pop { font-size: .72rem; color: var(--rain); min-height: 1.1em; }
+.hour .amt { font-size: .68rem; color: var(--rain); min-height: 1.1em; font-weight: 600; white-space: nowrap; }
+.total { font-size: .88rem; margin: -2px 0 12px; }
+.total b { color: var(--rain); font-weight: 600; }
 .chart { display: block; height: 54px; width: 100%; }
 
 .days { display: grid; }
@@ -110,6 +113,36 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .results button { width: 100%; text-align: left; margin-top: 6px; }
 footer { color: var(--muted); font-size: .75rem; text-align: center; }
 footer .term { font-size: .8rem; }
+
+/* ───────── 80s retrowave, from Flaw Patrol: neon sunset, pink grid, cyan highlights, glowing edges ───────── */
+:root[data-look="retro"] {
+  --bg: #120726; --surface: rgb(28 13 56 / .94); --fg: #f3eaff; --muted: #c3b2e8; --line: #6a2a68;
+  --accent: #2de2e6; --warm: #ffd84d; --rain: #5ff0e0; --moonlit: #ffd84d;
+  --alert-bg: #3a0c4f; --alert-fg: #ffd84d; color-scheme: dark;
+  --look-glow: 0 0 14px -3px rgb(45 226 230 / .85);
+}
+:root[data-look="retro"] body { background: linear-gradient(180deg, #0b031c 0%, #1a0838 55%, #3a0c4f 100%) fixed, #120726; }
+:root[data-look="retro"] body::before {
+  content: ""; position: fixed; left: 50%; bottom: 19vh; width: min(420px, 70vw); aspect-ratio: 2 / 1; transform: translateX(-50%);
+  z-index: -1; pointer-events: none; border-radius: 999px 999px 0 0; opacity: .35;
+  background: repeating-linear-gradient(180deg, transparent 0 62%, #2a0b45 62% 64%, transparent 64% 72%, #2a0b45 72% 75%, transparent 75% 83%, #2a0b45 83% 87%), linear-gradient(180deg, #ffd84d, #ff8a3d 50%, #ff3fa4);
+}
+:root[data-look="retro"] body::after {
+  content: ""; position: fixed; left: -40vw; right: -40vw; bottom: 0; height: 22vh; z-index: -1; pointer-events: none;
+  background-image: linear-gradient(rgb(255 79 216 / .45) 2px, transparent 2px), linear-gradient(90deg, rgb(255 79 216 / .45) 2px, transparent 2px);
+  background-size: 64px 34px; transform: perspective(260px) rotateX(55deg); transform-origin: bottom;
+  border-top: 2px solid rgb(255 79 216 / .8); box-shadow: 0 -8px 24px rgb(255 79 216 / .35);
+}
+:root[data-look="retro"] .place h1 {
+  background: linear-gradient(180deg, #ffd84d 10%, #ff8a3d 55%, #ff4fb5 90%); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: .02em;
+}
+:root[data-look="retro"] .label, :root[data-look="retro"] .look-sec h4, :root[data-look="retro"] .explain h3 { color: #ff7fd0; letter-spacing: .06em; }
+:root[data-look="retro"] .panel, :root[data-look="retro"] dialog.explain { border-color: rgb(255 95 200 / .42); box-shadow: 0 0 18px -8px rgb(255 79 216 / .7); }
+:root[data-look="retro"] header button { border-color: #2de2e6; box-shadow: var(--look-glow); }
+:root[data-look="retro"] .now .big { text-shadow: 0 0 18px rgb(45 226 230 / .45); }
+:root[data-look="retro"] .chip[aria-pressed="true"] { box-shadow: inset 0 0 0 1px #2de2e6, var(--look-glow); }
+:root[data-look="retro"] .chart path[stroke] { filter: drop-shadow(0 0 4px rgb(45 226 230 / .8)); }
+:root[data-look="retro"] :focus-visible { outline: 3px solid #2de2e6; outline-offset: 2px; }
 
 /* Radar */
 .radar-map { height: 340px; border-radius: 10px; overflow: hidden; background: var(--line); margin: 0 -4px; }
@@ -237,6 +270,41 @@ async function getJSON(url, opts = {}) {
   return res.json();
 }
 
+// ---------- precipitation amounts ----------
+const hourKey = (d) => Math.floor(d.getTime() / 36e5);
+const localDay = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+function isoHours(dur) {          // "PT6H", "P1D", "P1DT6H" -> hours
+  const m = /P(?:(\d+)D)?(?:T(?:(\d+)H)?)?/.exec(dur || "");
+  return m ? (+(m[1] || 0)) * 24 + (+(m[2] || 0)) : 1;
+}
+// NWS gives amounts for time blocks ("2026-11-16T12:00:00+00:00/PT6H"); spread each block evenly over its hours.
+function spreadByHour(values) {
+  if (!Array.isArray(values)) return null;
+  const map = new Map();
+  for (const v of values) {
+    if (v.value == null) continue;
+    const [start, dur] = v.validTime.split("/");
+    const h0 = hourKey(new Date(start)), n = Math.max(1, isoHours(dur));
+    for (let i = 0; i < n; i++) map.set(h0 + i, (map.get(h0 + i) || 0) + v.value / n);
+  }
+  return map;
+}
+function sumForDay(map, dayKey) {
+  let total = 0;
+  for (const [h, mm] of map) if (localDay(h * 36e5) === dayKey) total += mm;
+  return total;
+}
+// 0.004 in shows nothing; under 0.01 in is a "trace"
+function amount(mm, snow = false) {
+  if (mm == null || mm < 0.1) return "";
+  if (units === "F") {
+    const inch = mm / 25.4;
+    if (inch < (snow ? 0.1 : 0.01)) return "trace";
+    return (snow ? (inch < 1 ? inch.toFixed(1) : Math.round(inch)) : inch < 1 ? inch.toFixed(2) : inch.toFixed(1)) + " in";
+  }
+  return snow ? (mm < 10 ? (mm / 10).toFixed(1) + " cm" : Math.round(mm / 10) + " cm") : (mm < 10 ? mm.toFixed(1) : Math.round(mm)) + " mm";
+}
+
 // National Weather Service (US only). Forecaster-reviewed grid forecast + real station observations.
 async function loadNWS(lat, lon) {
   const pt = await getJSON(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`);
@@ -248,11 +316,18 @@ async function loadNWS(lat, lon) {
     getJSON(`https://api.weather.gov/alerts/active?point=${lat.toFixed(4)},${lon.toFixed(4)}`).catch(() => null)
   ]);
 
+  // Predicted amounts (QPF and snowfall) come from the raw grid data, in blocks of 1–6 hours.
+  const grid = await getJSON(p.forecastGridData).catch(() => null);
+  const rainByHour = spreadByHour(grid?.properties?.quantitativePrecipitation?.values);
+  const snowByHour = spreadByHour(grid?.properties?.snowfallAmount?.values);
+
   const hourly = hr.properties.periods.slice(0, 24).map((h) => ({
     time: new Date(h.startTime),
     tempC: h.temperatureUnit === "F" ? fToC(h.temperature) : h.temperature,
     pop: h.probabilityOfPrecipitation?.value ?? null,
-    desc: h.shortForecast, isDay: h.isDaytime
+    desc: h.shortForecast, isDay: h.isDaytime,
+    rainMm: rainByHour ? rainByHour.get(hourKey(new Date(h.startTime))) ?? 0 : null,
+    snowMm: snowByHour ? snowByHour.get(hourKey(new Date(h.startTime))) ?? 0 : null
   }));
 
   // Nearest station that has a fresh report
@@ -303,6 +378,10 @@ async function loadNWS(lat, lon) {
     if (pop != null) d.pop = Math.max(d.pop ?? 0, pop);
   }
 
+  if (rainByHour) for (const d of days) {
+    d.rainMm = sumForDay(rainByHour, d.key);
+    d.snowMm = snowByHour ? sumForDay(snowByHour, d.key) : 0;
+  }
   const rl = p.relativeLocation?.properties;
   return {
     place: rl ? `${rl.city}, ${rl.state}` : null,
@@ -329,8 +408,8 @@ async function loadOpenMeteo(lat, lon) {
   const q = new URLSearchParams({
     latitude: lat, longitude: lon, timezone: "auto", forecast_days: 8,
     current: "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,dew_point_2m,visibility,is_day",
-    hourly: "temperature_2m,precipitation_probability,weather_code,is_day",
-    daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+    hourly: "temperature_2m,precipitation_probability,weather_code,is_day,rain,showers,snowfall",
+    daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,snowfall_sum"
   });
   const d = await getJSON(`https://api.open-meteo.com/v1/forecast?${q}`);
   const c = d.current;
@@ -341,14 +420,18 @@ async function loadOpenMeteo(lat, lon) {
   const hourly = d.hourly.time.slice(startIdx, startIdx + 24).map((s, i) => ({
     time: toDate(s), tempC: d.hourly.temperature_2m[startIdx + i],
     pop: d.hourly.precipitation_probability?.[startIdx + i] ?? null,
-    desc: WMO[d.hourly.weather_code[startIdx + i]] || "", isDay: !!d.hourly.is_day[startIdx + i]
+    desc: WMO[d.hourly.weather_code[startIdx + i]] || "", isDay: !!d.hourly.is_day[startIdx + i],
+    rainMm: (d.hourly.rain?.[startIdx + i] ?? 0) + (d.hourly.showers?.[startIdx + i] ?? 0),
+    snowMm: (d.hourly.snowfall?.[startIdx + i] ?? 0) * 10          // Open-Meteo snowfall is in cm
   }));
   const days = d.daily.time.slice(0, 7).map((s, i) => {
     const date = new Date(s + "T12:00:00Z");
     return {
       key: s, name: i === 0 ? "Today" : date.toLocaleDateString(undefined, { weekday: "long", timeZone: "UTC" }),
       hiC: d.daily.temperature_2m_max[i], loC: d.daily.temperature_2m_min[i],
-      pop: d.daily.precipitation_probability_max?.[i], desc: WMO[d.daily.weather_code[i]] || "", isDay: true
+      pop: d.daily.precipitation_probability_max?.[i], desc: WMO[d.daily.weather_code[i]] || "", isDay: true,
+      rainMm: Math.max(0, (d.daily.precipitation_sum?.[i] ?? 0) - (d.daily.snowfall_sum?.[i] ?? 0) * 0.7),   // precipitation_sum includes snow as water
+      snowMm: (d.daily.snowfall_sum?.[i] ?? 0) * 10
     };
   });
   return {
@@ -608,6 +691,13 @@ const TERMS = {
     extra: () => { const m = moonPhase(); return scaleList([["New moon", "Dark, rises with the sun"], ["First quarter", "Right half lit, high at sunset"], ["Full moon", "All lit, rises at sunset"], ["Last quarter", "Left half lit, up at dawn"]], ["New moon", "First quarter", "Full moon", "Last quarter"].indexOf(m.name)); },
     now: () => { const m = moonPhase(); return `${m.name}, ${Math.round(m.illum * 100)}% lit. ${m.waxing ? `Full moon in about ${Math.round(m.daysToFull)} day${Math.round(m.daysToFull) === 1 ? "" : "s"}.` : `New moon in about ${Math.round(m.daysToNew)} day${Math.round(m.daysToNew) === 1 ? "" : "s"}.`}`; }
   },
+  amount: {
+    title: "Rain amount",
+    aka: "Forecasters call it QPF: quantitative precipitation forecast",
+    what: "How much water is expected to land, measured as depth: if none soaked in or ran off, how deep it would be in a flat pan. Even an inch of rain is a lot of water. Snow is measured separately as how deep it piles up, and is usually about 10 times deeper than the same amount of rain.",
+    extra: () => scaleList([["Under 0.10 in", "A light shower. Damp pavement"], ["0.10–0.25 in", "A steady light rain"], ["0.25–0.50 in", "A good soaking"], ["0.50–1 in", "Heavy. Puddles everywhere"], ["Over 1 in", "Very heavy. Watch for flooding"]], -1),
+    now: (c, d) => { const r = d.hourly.reduce((a, h) => a + (h.rainMm || 0), 0); return amount(r) ? `About ${amount(r)} is expected over the next 24 hours.` : "No measurable rain expected in the next 24 hours."; }
+  },
   radar: {
     title: "Weather radar",
     aka: "NEXRAD: the National Weather Service's network of 160 Doppler radars",
@@ -651,7 +741,7 @@ function explain(key) {
   $("explainBody").scrollTop = 0;
 }
 function explainAll() {
-  const order = ["temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "visibility", "pop", "radar", "sunrise", "moon", "station", "forecast", "hourly", "alerts"];
+  const order = ["temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "visibility", "pop", "amount", "radar", "sunrise", "moon", "station", "forecast", "hourly", "alerts"];
   $("explainBody").innerHTML = `<div><h3 id="explainTitle">What the words mean</h3></div>
     <p>Tap any underlined word in the app to see what it means and what today's number tells you.</p>
     <div class="all">${order.map((k) => termBtn(k, TERMS[k].title)).join("")}</div>
@@ -692,7 +782,13 @@ const FONT_GROUPS = ["Flaw Patrol", "Easy reading", "Open Foundry", "Fun"];
 const fontById = (id) => FONT_LIST.find((f) => f.id === id);
 const fam = (f) => f.family === "system-ui" ? "system-ui, sans-serif" : `"${f.family}", system-ui, sans-serif`;
 
-let look = Object.assign({ mode: "system", color: "weather", body: "weather", heading: "weather" }, store.get(LK) || {});
+let look = Object.assign({ style: "classic", mode: "system", color: "weather", body: "weather", heading: "weather" }, store.get(LK) || {});
+// Flaw Patrol "looks" that are carried over. A look has its own screen color, so mode and multi-color themes step aside.
+const STYLES = [
+  { id: "classic", label: "Classic", sub: "Your own colors and mode" },
+  { id: "retro", label: "80s retrowave", sub: "Neon sunset, pink grid, glowing edges", mode: "dark", heading: "righteous" }
+];
+const styleOf = () => STYLES.find((x) => x.id === look.style) || STYLES[0];
 const darkMQ = window.matchMedia("(prefers-color-scheme: dark)");
 
 function palette(dark) {
@@ -709,12 +805,14 @@ function palette(dark) {
 
 function applyLook() {
   const root = document.documentElement, st = root.style;
-  const dark = look.mode === "dark" || (look.mode === "system" && darkMQ.matches);
+  const sty = styleOf();
+  const dark = sty.mode ? sty.mode === "dark" : look.mode === "dark" || (look.mode === "system" && darkMQ.matches);
+  if (sty.id === "classic") delete root.dataset.look; else root.dataset.look = sty.id;
   ["--bg", "--surface", "--fg", "--muted", "--line", "--accent", "--bar", "--bar-fg", "--bar-muted", "--body", "--display", "--display-adjust"].forEach((k) => st.removeProperty(k));
   // Explicit light/dark beats the phone's setting: switch the default tokens by attribute.
   root.dataset.theme = dark ? "dark" : "light";
   st.colorScheme = dark ? "dark" : "light";
-  const p = palette(dark);
+  const p = sty.id === "classic" ? palette(dark) : null;
   if (p) {
     st.setProperty("--bg", p.bg); st.setProperty("--surface", p.surface); st.setProperty("--fg", p.fg);
     st.setProperty("--muted", p.muted); st.setProperty("--line", p.line); st.setProperty("--accent", p.accent);
@@ -724,7 +822,7 @@ function applyLook() {
   if (radar?.base) radar.base.setUrl(`https://{s}.basemaps.cartocdn.com/${dark ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`);
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = getComputedStyle(document.body).backgroundColor;
-  const b = fontById(look.body), h = look.heading === "body" ? b : fontById(look.heading);
+  const b = fontById(look.body), h = look.heading === "body" ? b : fontById(look.heading === "weather" && sty.heading ? sty.heading : look.heading);
   if (b) st.setProperty("--body", fam(b));
   if (h) { st.setProperty("--display", fam(h)); if (h.adjust) st.setProperty("--display-adjust", h.adjust); }
   else if (look.heading === "body" && !b) st.setProperty("--display", "var(--body)");
@@ -740,7 +838,7 @@ function saveLook(change) {
 
 function openLook() {
   const chip = (attrs, inner, on, plain) => `<button type="button" class="chip${plain ? " plain" : ""}" aria-pressed="${on}" ${attrs}>${inner}</button>`;
-  const dark = look.mode === "dark" || (look.mode === "system" && darkMQ.matches);
+  const dark = document.documentElement.dataset.theme === "dark";
   const sw = (cols) => `<span class="swatch">${cols.map((c) => `<span style="background:${c}"></span>`).join("")}</span>`;
   const fontOptions = (val, bodyOnly, withSame) => `
     <option value="weather"${val === "weather" ? " selected" : ""}>Local Weather (default)</option>
@@ -749,10 +847,13 @@ function openLook() {
   const prev = (id, sample) => { const f = id === "body" ? fontById(look.body) : fontById(id); return `<div class="font-prev" style="font-family:${f ? fam(f).replace(/"/g, "&quot;") : "var(--body)"}">${sample}</div>`; };
   $("explainBody").innerHTML = `
     <div><h3 id="explainTitle">Look</h3><div class="aka">The same colors and fonts as Flaw Patrol. Saved on this phone.</div></div>
-    <section class="look-sec"><h4>Mode</h4><div class="chips">
+    <section class="look-sec"><h4>Style</h4><div class="chips">
+      ${STYLES.map((x) => chip(`data-look-style="${x.id}" title="${x.sub}"`, x.label, look.style === x.id, true)).join("")}
+    </div>${styleOf().mode ? `<p class="sub-h">${styleOf().label} has its own dark screen and title font. Pick Classic to use your own mode and colors.</p>` : ""}</section>
+    <section class="look-sec"${styleOf().mode ? ' hidden' : ""}><h4>Mode</h4><div class="chips">
       ${[["light", "Light"], ["dark", "Dark"], ["system", "Match my phone"]].map(([id, l]) => chip(`data-look-mode="${id}"`, l, look.mode === id, true)).join("")}
     </div></section>
-    <section class="look-sec"><h4>Colors</h4>
+    <section class="look-sec"${styleOf().mode ? ' hidden' : ""}><h4>Colors</h4>
       <div class="chips">${chip('data-look-color="weather"', `<span class="dot" style="background:${dark ? "#6db7ea" : "#1d6fa5"}"></span>Local Weather`, look.color === "weather")}
       ${ACCENT_HUES.map((a) => chip(`data-look-color="${a.id}"`, `<span class="dot" style="background:oklch(.51 .2 ${a.hue})"></span>${a.label}`, look.color === a.id)).join("")}</div>
       <p class="sub-h">Two colors: one for the page, one for the panels</p>
@@ -768,6 +869,7 @@ function openLook() {
     </section>
     <button type="button" class="close" id="explainClose">Done</button>`;
   $("explainClose").onclick = () => $("explain").close();
+  $("explainBody").querySelectorAll("[data-look-style]").forEach((b) => (b.onclick = () => saveLook({ style: b.dataset.lookStyle })));
   $("explainBody").querySelectorAll("[data-look-mode]").forEach((b) => (b.onclick = () => saveLook({ mode: b.dataset.lookMode })));
   $("explainBody").querySelectorAll("[data-look-color]").forEach((b) => (b.onclick = () => saveLook({ color: b.dataset.lookColor })));
   $("lookBody").onchange = (e) => saveLook({ body: e.target.value });
@@ -839,9 +941,14 @@ function render() {
 
   <section class="panel" aria-label="Next 24 hours">
     <h2 class="label">Next 24 hours</h2>
-    <div class="hint">${termBtn("hourly", "Temperature line")} · blue % = ${termBtn("pop", "chance of rain")}</div>
+    <div class="hint">${termBtn("hourly", "Temperature line")} · blue % = ${termBtn("pop", "chance of rain")} · inches = ${termBtn("amount", "how much")}</div>
+    ${(() => { const r = d.hourly.reduce((a, h) => a + (h.rainMm || 0), 0), sn = d.hourly.reduce((a, h) => a + (h.snowMm || 0), 0);
+      const known = d.hourly.some((h) => h.rainMm != null);
+      if (!known) return "";
+      const parts = [amount(r) && `${amount(r)} of rain`, amount(sn, true) && `${amount(sn, true)} of snow`].filter(Boolean);
+      return `<div class="total">${parts.length ? `Expected in the next 24 hours: <b>${parts.join(" and ")}</b>` : "No measurable rain or snow expected in the next 24 hours"}</div>`; })()}
     <div class="hourly-wrap">
-      <div class="hourly">${d.hourly.map((h, i) => `<div class="hour"><div class="t">${i === 0 ? "Now" : fmtHour(h.time)}</div>${iconFor(h.desc, h.isDay)}<div class="temp">${t(h.tempC)}</div><div class="pop">${h.pop ? h.pop + "%" : ""}</div></div>`).join("")}</div>
+      <div class="hourly">${d.hourly.map((h, i) => `<div class="hour"><div class="t">${i === 0 ? "Now" : fmtHour(h.time)}</div>${iconFor(h.desc, h.isDay)}<div class="temp">${t(h.tempC)}</div><div class="pop">${h.pop ? h.pop + "%" : ""}</div><div class="amt">${amount(h.snowMm, true) ? "❄ " + amount(h.snowMm, true) : amount(h.rainMm)}</div></div>`).join("")}</div>
       ${hourlyChart(d.hourly)}
     </div>
   </section>
@@ -853,7 +960,7 @@ function render() {
       <div class="day">
         <div class="name">${esc(x.name)}</div>
         ${iconFor(x.desc, x.isDay !== false)}
-        <div class="short">${esc(x.desc)}${x.pop ? ` <span class="pop">· ${x.pop}%</span>` : ""}</div>
+        <div class="short">${esc(x.desc)}${x.pop ? ` <span class="pop">· ${x.pop}%${amount(x.rainMm) ? `, ${amount(x.rainMm)}` : ""}${amount(x.snowMm, true) ? `, ${amount(x.snowMm, true)} snow` : ""}</span>` : ""}</div>
         <div class="range">${x.hiC != null ? t(x.hiC) : ""}${x.loC != null ? ` <span class="lo">${t(x.loC)}</span>` : ""}</div>
         ${x.detail || x.nightDetail ? `<details><summary>Forecaster notes</summary><p>${termBtn("forecast", "Who writes these?")}</p>${x.detail ? `<p>${esc(x.detail)}</p>` : ""}${x.nightDetail ? `<p>Night: ${esc(x.nightDetail)}</p>` : ""}</details>` : ""}
       </div>`).join("")}</div>
