@@ -177,7 +177,7 @@ public class WidgetUpdateWorker extends Worker {
         return q.optDouble("value");
     }
 
-    private static double toC(JSONObject period) {
+    private static double toC(JSONObject period) throws Exception {
         double t = period.getDouble("temperature");
         return "F".equals(period.optString("temperatureUnit", "F")) ? (t - 32) * 5 / 9 : t;
     }
