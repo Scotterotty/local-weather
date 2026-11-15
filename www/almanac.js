@@ -189,7 +189,7 @@ function renderAlmanac() {
   const z = almanac.zone, zEst = zoneFromExtreme(c.meanExtremeMinC);
   html += `<div class="alm-sec"><h3>${termBtn("frost", "Frost dates")} and ${termBtn("zone", "growing zone")}</h3>
     <p>${frostRare ? `Frost is rare here: it showed up in only ${c.frostYears} of the last ${c.years} winters.` : `Last spring frost: around <b>${esc(monthDay(c.lastSpring))}</b>. First fall frost: around <b>${esc(monthDay(c.firstFall))}</b>. That's about ${Math.round((c.firstFall - c.lastSpring) / 7)} weeks of frost-free growing.`}</p>
-    <p>${z ? `USDA hardiness zone <b>${esc(z.zone)}</b>${z.range ? ` (coldest nights usually ${esc(z.range)}°F)` : ""}.` : zEst ? `About USDA hardiness zone <b>${zEst}</b>, estimated from 20 years of local temperatures.` : ""}</p></div>`;
+    <p>${z ? `USDA hardiness zone <b>${termBtn("zone", esc(z.zone))}</b>${z.range ? ` (coldest nights usually ${esc(z.range)}°F)` : ""}.` : zEst ? `About USDA hardiness zone <b>${termBtn("zone", zEst)}</b>, estimated from 20 years of local temperatures.` : ""}</p></div>`;
 
   // 3. Garden
   const tips = plantingNow(c, doy);
@@ -233,6 +233,19 @@ function mountAlmanac() {
   refreshAlmanac();
 }
 
+// What a zone means in practice, in plain words
+const ZONE_PLANTS = {
+  1: "Only the toughest plants survive here, like dwarf birch and some willows.", 2: "Hardy plants like spruce, birch and rhubarb do well.",
+  3: "Apples, lilacs and peonies can handle these winters.", 4: "Apples, lilacs, peonies and many maples grow well.",
+  5: "Peaches, roses and most garden perennials survive the winter.", 6: "Peaches, figs with some protection, and lots of perennials grow well.",
+  7: "Figs, crape myrtles and many evergreens thrive.", 8: "Camellias, figs and crape myrtles thrive, and many vegetables grow almost all year.",
+  9: "Oranges and lemons can grow outside, and many vegetables grow through the winter.",
+  10: "Citrus, avocados and bougainvillea grow outside all year, and winter is the best time for lettuce, peas and broccoli.",
+  11: "Frost almost never comes: mangoes, bananas and other tropical plants can grow outdoors.",
+  12: "Tropical: coconuts, papayas and other plants that can't take any cold.", 13: "Fully tropical: almost anything that likes heat grows here."
+};
+function currentZone() { return almanac.zone?.zone || (almanac.clim ? zoneFromExtreme(almanac.clim.meanExtremeMinC) : null); }
+
 // Explanations for the almanac's own words
 Object.assign(TERMS, {
   normal: {
@@ -245,8 +258,21 @@ Object.assign(TERMS, {
   },
   zone: {
     title: "Hardiness zone",
+    nowLabel: "Your zone",
     aka: "The USDA Plant Hardiness Zone map",
-    what: "A number for how cold your winters get, based on the coldest night of the year averaged over many years. Each zone is 10°F colder or warmer than the next, and \"a\" and \"b\" split it in half. Plant tags list zones, so you can tell whether a tree or flower can survive your winters."
+    what: "A number for how cold your winters get. It's based on the coldest night of each year, averaged over 30 years. Zone 1 (interior Alaska) is the coldest and zone 13 (Puerto Rico) the warmest. Each step up is 10°F warmer. The letter splits each zone into two 5°F halves: \"a\" is the colder half and \"b\" the warmer half. Plant tags list zones, so a tag saying \"zones 4–9\" means the plant can survive winters in any of those zones.",
+    extra: () => {
+      const z = currentZone();
+      if (!z) return "";
+      const n = parseInt(z, 10), lo = (n - 1) * 10 - 60;
+      return scaleList([[`${n}a`, `Coldest nights ${lo} to ${lo + 5}°F`], [`${n}b`, `Coldest nights ${lo + 5} to ${lo + 10}°F`]], z.endsWith("a") ? 0 : 1);
+    },
+    now: () => {
+      const z = currentZone();
+      if (!z) return null;
+      const n = parseInt(z, 10), half = z.slice(-1), lo = (n - 1) * 10 - 60 + (half === "b" ? 5 : 0);
+      return `You're in zone ${z}: on the coldest night of a typical year it drops to about ${lo} to ${lo + 5}°F. The "${half}" means you're in the ${half === "a" ? "colder" : "warmer"} half of zone ${n}. ${ZONE_PLANTS[Math.min(13, Math.max(1, n))]}`;
+    }
   },
   inat: {
     title: "iNaturalist",

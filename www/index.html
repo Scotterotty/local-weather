@@ -844,7 +844,7 @@ function explain(key) {
     <div><h3 id="explainTitle">${tm.title}</h3>${tm.aka ? `<div class="aka">${esc(tm.aka)}</div>` : ""}</div>
     <p>${esc(tm.what)}</p>
     ${tm.extra ? tm.extra() : ""}
-    ${nowText ? `<div class="now-box"><div class="k">Right now</div><p>${esc(nowText)}</p></div>` : ""}
+    ${nowText ? `<div class="now-box"><div class="k">${tm.nowLabel || "Right now"}</div><p>${esc(nowText)}</p></div>` : ""}
     <button type="button" class="close" id="explainClose">Done</button>`;
   $("explainClose").onclick = () => $("explain").close();
   const dlg = $("explain");
