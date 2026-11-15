@@ -1,0 +1,21 @@
+{
+  "name": "local-weather",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hyper-local weather for wherever you are. NWS forecasts and live station readings, wrapped as a native iOS/Android app with Capacitor.",
+  "scripts": {
+    "sync": "cap sync",
+    "android": "cap open android",
+    "ios": "cap open ios",
+    "serve": "npx --yes http-server www -p 8080 -c-1"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/geolocation": "^8.2.4",
+    "@capacitor/ios": "^8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.2"
+  }
+}

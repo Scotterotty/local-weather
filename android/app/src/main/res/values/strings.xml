@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Local Weather</string>
+    <string name="title_activity_main">Local Weather</string>
+    <string name="package_name">com.scotterotty.localweather</string>
+    <string name="custom_url_scheme">com.scotterotty.localweather</string>
+</resources>
