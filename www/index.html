@@ -5,9 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0f2a3d">
 <title>Local Weather</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="fonts/fonts.css">
 <style>
 /* Layout: one column, "now" block first, then hourly strip, then 7-day list. */
 :root {
@@ -25,12 +23,17 @@
   --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0b1821; --surface: #12232f; --fg: #e6eef3; --muted: #93a8b6;
     --line: #23394a; --accent: #6db7ea; --warm: #f0a25e; --rain: #6aaee8;
     --alert-bg: #3a2210; --alert-fg: #ffc898; color-scheme: dark;
   }
 }
+:root[data-theme="dark"] {
+    --bg: #0b1821; --surface: #12232f; --fg: #e6eef3; --muted: #93a8b6;
+    --line: #23394a; --accent: #6db7ea; --warm: #f0a25e; --rain: #6aaee8;
+    --alert-bg: #3a2210; --alert-fg: #ffc898; color-scheme: dark;
+  }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 body {
@@ -39,6 +42,8 @@ body {
 }
 main { max-width: 720px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
 main > * { min-width: 0; }
+header.banded { background: var(--bar); color: var(--bar-fg); border-radius: 14px; padding: 14px 16px; }
+header.banded .place .sub { color: var(--bar-muted); }
 header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .place { min-width: 0; }
 .place h1 { font: 600 1.35rem/1.2 var(--display); margin: 0; text-wrap: balance; }
@@ -54,6 +59,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .label { font: 600 .72rem var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
 
 .now { display: grid; grid-template-columns: auto 1fr; gap: 8px 20px; align-items: center; }
+.now .big, .day .range, .hour .temp, .stat .v { font-size-adjust: var(--display-adjust, none); }
 .now .big { font: 500 5rem/1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .now .big sup { font-size: .4em; vertical-align: top; position: relative; top: .35em; color: var(--muted); }
 .now .desc { font: 600 1.3rem/1.2 var(--display); display: flex; align-items: center; gap: 8px; }
@@ -96,6 +102,51 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .results { list-style: none; padding: 0; margin: 10px auto 0; max-width: 420px; text-align: left; }
 .results button { width: 100%; text-align: left; margin-top: 6px; }
 footer { color: var(--muted); font-size: .75rem; text-align: center; }
+footer .term { font-size: .8rem; }
+
+/* Look sheet */
+.look-sec { display: grid; gap: 8px; }
+.look-sec h4 { font: 600 .72rem var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.look-sec .sub-h { font-size: .8rem; color: var(--muted); margin: 4px 0 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); font: 500 .85rem var(--body); cursor: pointer; }
+.chip.plain { padding: 7px 12px; }
+.chip[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); font-weight: 600; }
+.dot { width: 20px; height: 20px; border-radius: 50%; flex: none; }
+.swatch { display: inline-flex; width: 34px; height: 20px; border-radius: 5px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); flex: none; }
+.swatch span { flex: 1; }
+.look-sec select { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); width: 100%; }
+.font-prev { font-size: .9rem; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--fg) 5%, var(--surface)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.font-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+
+/* Tappable terms: dotted underline says "there's an explanation here" without adding icons. */
+.term {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer;
+  text-decoration: underline dotted; text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 3px; text-decoration-thickness: 1px; border-radius: 3px; text-align: inherit;
+}
+.term:hover { text-decoration-color: var(--accent); }
+.hint { color: var(--muted); font-size: .78rem; margin: -4px 0 10px; }
+
+dialog.explain {
+  border: 1px solid var(--line); border-radius: 18px; padding: 0; background: var(--surface); color: var(--fg);
+  width: min(520px, calc(100vw - 24px)); max-height: 85vh; margin: auto auto max(12px, env(safe-area-inset-bottom)); box-shadow: 0 18px 50px rgba(0,0,0,.25);
+}
+dialog.explain::backdrop { background: rgba(5, 15, 22, .45); }
+.explain .inner { padding: 20px 20px 18px; display: grid; gap: 12px; }
+.explain h3 { font: 600 1.45rem/1.15 var(--display); margin: 0; }
+.explain .aka { color: var(--muted); font-size: .8rem; margin-top: 2px; }
+.explain p { margin: 0; font-size: .95rem; line-height: 1.55; }
+.explain .now-box { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border-radius: 12px; padding: 12px 14px; }
+.explain .now-box .k { font: 600 .68rem var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+.explain .scale { display: grid; gap: 4px; font-size: .85rem; margin: 0; padding: 0; list-style: none; }
+.explain .scale li { display: grid; grid-template-columns: 6.5rem 1fr; gap: 10px; padding: 4px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.explain .scale li.on { font-weight: 600; color: var(--accent); }
+.explain .scale li:first-child { border-top: 0; }
+.explain .close { justify-self: end; }
+.explain .all { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.explain .all .term { font-size: .9rem; color: var(--accent); }
+
 footer a { color: var(--accent); }
 .err { color: var(--alert-fg); }
 @media (max-width: 420px) {
@@ -113,6 +164,7 @@ footer a { color: var(--accent); }
       <div class="sub" id="placeSub"></div>
     </div>
     <div class="controls">
+      <button id="lookBtn" type="button">Look</button>
       <button id="unitBtn" type="button" aria-label="Switch units">°F</button>
       <button id="locBtn" type="button">Use my location</button>
       <button id="refreshBtn" type="button">Refresh</button>
@@ -123,6 +175,7 @@ footer a { color: var(--accent); }
 
   <footer id="footer"></footer>
 </main>
+<dialog class="explain" id="explain" aria-labelledby="explainTitle"><div class="inner" id="explainBody"></div></dialog>
 
 <script>
 "use strict";
@@ -325,6 +378,242 @@ function iconFor(desc = "", isDay = true) {
   return `<svg class="icon" viewBox="0 0 32 32" aria-hidden="true">${parts[kind]}</svg>`;
 }
 
+// ---------- explanations ----------
+// Each entry: title, what it is, why it matters, and (when we have a value) what today's number means.
+const termBtn = (key, text) => `<button type="button" class="term" data-term="${key}">${text}</button>`;
+const F = (c) => cToF(c);
+function scaleList(rows, activeIdx) {
+  return `<ul class="scale">${rows.map(([a, b], i) => `<li class="${i === activeIdx ? "on" : ""}"><span>${a}</span><span>${b}</span></li>`).join("")}</ul>`;
+}
+function pickIdx(v, limits) { let i = 0; while (i < limits.length && v >= limits[i]) i++; return i; }
+
+const TERMS = {
+  temp: {
+    title: "Temperature",
+    what: "How warm or cold the air is, measured about 6 feet off the ground in the shade. Thermometers are kept out of the sun because sunlight would heat the thermometer itself, not just the air.",
+    now: (c) => c.station ? `${t(c.tempC)}, measured by a real weather station near you, not guessed by a computer.` : `${t(c.tempC)}, from the forecast because no nearby station has reported recently.`
+  },
+  feels: {
+    title: "Feels like",
+    aka: "Also called wind chill (when cold) or heat index (when hot)",
+    what: "Your body doesn't feel the thermometer reading. Wind pulls heat away from your skin, so cold, windy days feel colder. Humid air makes it hard for sweat to dry and cool you off, so hot, sticky days feel hotter.",
+    now: (c) => c.feelsC == null ? null : c.feelsC < c.tempC ? `It's ${t(c.tempC)}, but the wind makes it feel like ${t(c.feelsC)}.` : `It's ${t(c.tempC)}, but the humidity makes it feel like ${t(c.feelsC)}.`
+  },
+  hilo: {
+    title: "High and low",
+    what: "The warmest temperature expected during the day and the coldest expected overnight. Lows usually happen just before sunrise, because the ground loses heat all night with no sun to warm it.",
+    now: (c, d) => d.days[0] ? [d.days[0].hiC != null && `Today should reach about ${t(d.days[0].hiC)}`, d.days[0].loC != null && `drop to about ${t(d.days[0].loC)} tonight`].filter(Boolean).join(" and ") + "." : null
+  },
+  wind: {
+    title: "Wind",
+    what: "How fast the air is moving and which way it's coming from. Wind is named for where it blows from, so a north wind comes from the north and pushes things south. It's measured 33 feet up, so it's often calmer at ground level.",
+    extra: () => {
+      const mph = lastData?.current.windKmh != null ? lastData.current.windKmh / 1.609344 : null;
+      return scaleList([["0–3 mph", "Calm. Smoke rises straight up"], ["4–7 mph", "Light breeze. You feel it on your face"], ["8–12 mph", "Leaves and small twigs keep moving"], ["13–18 mph", "Dust and loose paper blow around"], ["19–24 mph", "Small trees sway"], ["25–31 mph", "Hard to use an umbrella"], ["32+ mph", "Whole trees move. Hard to walk into it"]], mph == null ? -1 : pickIdx(mph, [4, 8, 13, 19, 25, 32]));
+    },
+    now: (c) => c.windKmh == null ? null : `${c.windDir ? `Coming from the ${c.windDir}` : "Blowing"} at ${wind(c.windKmh)}.`
+  },
+  gusts: {
+    title: "Gusts",
+    what: "Sudden, short bursts of stronger wind, lasting a few seconds. They're what knocks over trash cans and flips umbrellas, even when the normal wind speed seems mild.",
+    now: (c) => c.gustKmh == null ? null : `Bursts up to ${wind(c.gustKmh)}${c.windKmh != null ? `, compared with a steady ${wind(c.windKmh)}` : ""}.`
+  },
+  humidity: {
+    title: "Humidity",
+    aka: "Relative humidity",
+    what: "How full of water vapor the air is, compared with the most it could hold at this temperature. 100% means the air is completely full, which is when you get fog or dew. Warm air can hold much more water than cold air, so the same amount of moisture shows a lower percentage on a warm afternoon than on a cool morning.",
+    now: (c) => c.humidity == null ? null : `${Math.round(c.humidity)}% full. ${c.humidity < 30 ? "Very dry: lips and skin dry out, and static shocks are common." : c.humidity < 60 ? "A comfortable middle range." : c.humidity < 85 ? "Fairly damp air." : "Nearly full: fog, dew or drizzle are likely."} For how sticky it actually feels, check the dew point.`
+  },
+  dew: {
+    title: "Dew point",
+    what: "The temperature the air would have to cool down to before water starts coming out of it as dew, fog or the drips on a cold glass. It's the best single number for how muggy it feels. The higher the dew point, the more moisture is in the air.",
+    extra: () => {
+      const v = lastData?.current.dewC;
+      return scaleList([["Below 50°F", "Dry and crisp"], ["50–59°F", "Comfortable"], ["60–64°F", "Getting a little sticky"], ["65–69°F", "Muggy"], ["70°F+", "Very humid and uncomfortable"]], v == null ? -1 : pickIdx(F(v), [50, 60, 65, 70]));
+    },
+    now: (c) => c.dewC == null ? null : `${t(c.dewC)}. ${c.tempC != null && c.tempC - c.dewC < 2.5 ? "That's very close to the air temperature, so fog or dew could form." : `The air would have to cool by about ${Math.round(Math.abs((units === "F" ? F(c.tempC) - F(c.dewC) : c.tempC - c.dewC)))}° before dew forms.`}`
+  },
+  pressure: {
+    title: "Air pressure",
+    aka: "Barometric pressure. inHg = inches of mercury · hPa = hectopascals",
+    what: "The weight of all the air above you pressing down. It was first measured with a tube of mercury, a heavy liquid metal: the air pushes the mercury up the tube about 30 inches. That's where \"inHg\" comes from (Hg is the chemical symbol for mercury). High pressure usually means calm, clear weather. Falling, low pressure often means clouds, wind and storms are on the way.",
+    extra: () => {
+      const v = lastData?.current.pressureHpa;
+      return scaleList([["Below 29.80", "Low. Unsettled, often stormy"], ["29.80–30.20", "Normal. Average is 29.92"], ["Above 30.20", "High. Usually clear and calm"]], v == null ? -1 : pickIdx(v * 0.02953, [29.8, 30.2]));
+    },
+    now: (c) => c.pressureHpa == null ? null : `${pres(c.pressureHpa)}${units === "F" ? ` (${Math.round(c.pressureHpa)} hPa)` : ` (${(c.pressureHpa * 0.02953).toFixed(2)} inHg)`}.`
+  },
+  visibility: {
+    title: "Visibility",
+    what: "How far you can clearly see. Fog, rain, snow, haze and smoke all cut it down. Stations stop counting at 10 miles, so 10 mi just means \"very clear.\"",
+    now: (c) => c.visKm == null ? null : `${vis(c.visKm)}. ${c.visKm >= 15 ? "Clear." : c.visKm >= 5 ? "Slightly hazy." : c.visKm >= 1 ? "Noticeably hazy or misty." : "Thick fog or heavy precipitation. Drivers should slow down."}`
+  },
+  pop: {
+    title: "Chance of precipitation",
+    aka: "Precipitation = any water falling from the sky: rain, drizzle, snow, sleet or hail",
+    what: "The chance that at least a little precipitation (about a hundredth of an inch, enough to wet the pavement) falls right where you are. 40% means that on 4 out of 10 days with weather like this, it rains at your spot. It doesn't say how hard it will rain or how long.",
+    extra: () => scaleList([["0–20%", "Unlikely. No need for an umbrella"], ["30–50%", "It might, it might not"], ["60–70%", "Likely. Bring a jacket"], ["80–100%", "Expect it"]], -1),
+    now: (c, d) => { const p = Math.max(0, ...d.hourly.slice(0, 12).map((h) => h.pop || 0)); return `The highest chance in the next 12 hours is ${p}%.`; }
+  },
+  station: {
+    title: "Weather station",
+    what: "A set of instruments (thermometer, wind vane, rain gauge, barometer) that reports what's actually happening outside. Many sit at airports, fire stations and schools. This app uses the nearest one that has reported in the last 90 minutes, so \"right now\" is a real measurement, not a prediction.",
+    now: (c) => c.station ? `${c.station}, reported at ${fmtTime(c.observedAt)}.` : "No nearby station has reported recently, so these numbers come from the forecast."
+  },
+  forecast: {
+    title: "Forecaster notes",
+    what: "Written by real meteorologists (weather scientists) at your local National Weather Service office. They look at computer models, satellite and radar, then write the forecast in plain words. That human check is a big part of why NWS forecasts are so accurate."
+  },
+  hourly: {
+    title: "The 24-hour chart",
+    what: "The line shows how the temperature should rise and fall over the next day. It usually climbs until mid-afternoon and drops overnight. The blue bars and percentages show the chance of rain or snow each hour. Taller bars mean a higher chance."
+  },
+  alerts: {
+    title: "Weather alerts",
+    what: "Official notices from the National Weather Service about dangerous weather. They come in three levels:",
+    extra: () => scaleList([["Advisory", "Be careful. It could be a hassle or mildly dangerous"], ["Watch", "Conditions are right for something dangerous. Be ready"], ["Warning", "It's happening or about to. Take action now"]], -1)
+  }
+};
+
+function explain(key) {
+  const tm = TERMS[key];
+  if (!tm) return;
+  const c = lastData?.current, nowText = c && tm.now ? tm.now(c, lastData) : null;
+  $("explainBody").innerHTML = `
+    <div><h3 id="explainTitle">${tm.title}</h3>${tm.aka ? `<div class="aka">${esc(tm.aka)}</div>` : ""}</div>
+    <p>${esc(tm.what)}</p>
+    ${tm.extra ? tm.extra() : ""}
+    ${nowText ? `<div class="now-box"><div class="k">Right now</div><p>${esc(nowText)}</p></div>` : ""}
+    <button type="button" class="close" id="explainClose">Done</button>`;
+  $("explainClose").onclick = () => $("explain").close();
+  const dlg = $("explain");
+  if (!dlg.open) dlg.showModal();
+  $("explainBody").scrollTop = 0;
+}
+function explainAll() {
+  const order = ["temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "visibility", "pop", "station", "forecast", "hourly", "alerts"];
+  $("explainBody").innerHTML = `<div><h3 id="explainTitle">What the words mean</h3></div>
+    <p>Tap any underlined word in the app to see what it means and what today's number tells you.</p>
+    <div class="all">${order.map((k) => termBtn(k, TERMS[k].title)).join("")}</div>
+    <button type="button" class="close" id="explainClose">Done</button>`;
+  $("explainClose").onclick = () => $("explain").close();
+  if (!$("explain").open) $("explain").showModal();
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-term]");
+  if (b) { e.preventDefault(); b.dataset.term === "all" ? explainAll() : explain(b.dataset.term); return; }
+  if (e.target === $("explain")) $("explain").close();   // tap outside the card closes it
+});
+
+// ---------- look: colors and fonts (same choices as Flaw Patrol) ----------
+const LK = "lw.look";
+const ACCENT_HUES = [
+  { id: "violet", label: "Flaw Patrol", hue: 295 }, { id: "ocean", label: "Ocean", hue: 255 },
+  { id: "teal", label: "Lagoon", hue: 195 }, { id: "forest", label: "Forest", hue: 150 },
+  { id: "rose", label: "Rose", hue: 12 }, { id: "sunset", label: "Sunset", hue: 45 }
+];
+const MULTI = {"peach":{"label":"Peach & Periwinkle","sub":"Peach page, periwinkle bars and panels","colors":2,"light":{"bg":"#fbe3d1","surface":"#f1f2ff","fg":"#1e2140","muted":"#535880","line":"#d8daf2","accent":"#4a55c9"},"dark":{"bg":"#2b1a10","surface":"#1a1d36","fg":"#eceeff","muted":"#a7acd2","line":"#2f3459","accent":"#b9c0ff"}},"butter":{"label":"Butter & Lilac","sub":"Butter page, lilac bars and panels","colors":2,"light":{"bg":"#f9eecb","surface":"#f5efff","fg":"#241a38","muted":"#5f5476","line":"#e2d8f5","accent":"#7442c8"},"dark":{"bg":"#231d0a","surface":"#1e1730","fg":"#f1ecff","muted":"#b5aad0","line":"#362a52","accent":"#cdb6ff"}},"quartz":{"label":"Rose Quartz & Ice","sub":"Dusty rose page, icy teal bars and panels","colors":2,"light":{"bg":"#f3d9df","surface":"#ecf7f7","fg":"#1b2a2b","muted":"#506466","line":"#d1e5e5","accent":"#0f7a80"},"dark":{"bg":"#28131a","surface":"#132426","fg":"#e7f5f5","muted":"#9cbcbd","line":"#244040","accent":"#86dde1"}},"denim":{"label":"Denim & Linen","sub":"Denim page, linen bars and panels","colors":2,"light":{"bg":"#d4def0","surface":"#fbf7ef","fg":"#22252b","muted":"#575b63","line":"#e7dfcf","accent":"#2b5fa8"},"dark":{"bg":"#0e1729","surface":"#221e17","fg":"#f2eee6","muted":"#b9b0a0","line":"#3a332a","accent":"#a3c1f3"}},"harbor":{"label":"Harbor","sub":"Navy bars, sand page, white panels","colors":3,"light":{"bg":"#f0e6d6","surface":"#ffffff","fg":"#1a2433","muted":"#596374","line":"#e5ddcf","accent":"#2563c9","bar":"#1d3557","barFg":"#f1f5fb","barMuted":"#a9bbd4"},"dark":{"bg":"#17130c","surface":"#1c2432","fg":"#eef2f8","muted":"#a7b2c3","line":"#2e3a4c","accent":"#9cc2ff","bar":"#0e1a2e","barFg":"#e7eef8","barMuted":"#8d9fbb"}},"grape":{"label":"Grape & Apricot","sub":"Grape bars, apricot page, cream panels","colors":3,"light":{"bg":"#fbe5d4","surface":"#fffcf8","fg":"#26193a","muted":"#645878","line":"#ecdccd","accent":"#7442c8","bar":"#3a1f63","barFg":"#f6f0ff","barMuted":"#c2b0e2"},"dark":{"bg":"#1f140c","surface":"#251c33","fg":"#f3edff","muted":"#b9aacf","line":"#3b2e52","accent":"#cfb8ff","bar":"#1f1236","barFg":"#f3edff","barMuted":"#ab9bc9"}},"lagoon":{"label":"Lagoon & Coral","sub":"Deep teal bars, coral page, sea-white panels","colors":3,"light":{"bg":"#fbe2d8","surface":"#f6fbfb","fg":"#132a2e","muted":"#4e6568","line":"#d5e5e6","accent":"#0e7c86","bar":"#0f4c55","barFg":"#eafbfb","barMuted":"#9ccbcf"},"dark":{"bg":"#23120d","surface":"#13272a","fg":"#e6f6f6","muted":"#9dbdbf","line":"#24403f","accent":"#7fd8df","bar":"#082c31","barFg":"#e6f6f6","barMuted":"#8fb6b9"}},"graphite":{"label":"Graphite & Saffron","sub":"Graphite bars, saffron page, white panels","colors":3,"light":{"bg":"#faedcd","surface":"#ffffff","fg":"#1f2228","muted":"#5b5f67","line":"#e9dfc8","accent":"#3555b8","bar":"#2a2e35","barFg":"#f4f4f2","barMuted":"#b0b4bc"},"dark":{"bg":"#201a09","surface":"#23252a","fg":"#f2f1ec","muted":"#adafb4","line":"#383b42","accent":"#a9bcf5","bar":"#15171b","barFg":"#f2f1ec","barMuted":"#a2a6ae"}}};
+const FONT_LIST = [
+  ["poppins","Poppins","Poppins","Flaw Patrol",600,1],["bungee","Bungee","Bungee","Flaw Patrol",400,0],["young-serif","Young Serif","Young Serif","Flaw Patrol",400,0],
+  ["inter","Inter","Inter","Easy reading",700,1],["atkinson","Atkinson Hyperlegible","Atkinson Hyperlegible Next","Easy reading",700,1],["lexend","Lexend","Lexend","Easy reading",600,1],
+  ["opendyslexic","OpenDyslexic","OpenDyslexic","Easy reading",700,1],["open-sans","Open Sans","Open Sans","Easy reading",700,1],["dm-sans","DM Sans","DM Sans","Easy reading",700,1],
+  ["lato","Lato","Lato","Easy reading",700,1],["system","System","system-ui","Easy reading",600,1],
+  ["archivo","Archivo","Archivo","Open Foundry",700,1],["work-sans","Work Sans","Work Sans","Open Foundry",600,1],["roboto","Roboto","Roboto","Open Foundry",700,1],
+  ["cooper-hewitt","Cooper Hewitt","Cooper Hewitt","Open Foundry",700,1],["aileron","Aileron","Aileron","Open Foundry",700,1],["libre-baskerville","Libre Baskerville","Libre Baskerville","Open Foundry",700,1],
+  ["eb-garamond","EB Garamond","EB Garamond","Open Foundry",600,1],["oswald","Oswald","Oswald","Open Foundry",600,0],["league-gothic","League Gothic","League Gothic","Open Foundry",400,0],
+  ["ostrich-sans","Ostrich Sans","Ostrich Sans","Open Foundry",900,0],["bluu-next","Bluu Next","Bluu Next","Open Foundry",700,0],["bagnard","Bagnard","Bagnard","Open Foundry",400,0],
+  ["nunito","Nunito","Nunito","Fun",700,1],["quicksand","Quicksand","Quicksand","Fun",700,1],["comic-neue","Comic Neue","Comic Neue","Fun",700,1],
+  ["space-grotesk","Space Grotesk","Space Grotesk","Fun",700,1],["chakra-petch","Chakra Petch","Chakra Petch","Fun",700,1],["courier-prime","Courier Prime","Courier Prime","Fun",700,1],
+  ["jetbrains-mono","JetBrains Mono","JetBrains Mono","Fun",700,1],["fraunces","Fraunces","Fraunces","Fun",600,0],["playfair","Playfair Display","Playfair Display","Fun",700,0],
+  ["bricolage","Bricolage Grotesque","Bricolage Grotesque","Fun",700,0],["fredoka","Fredoka","Fredoka","Fun",600,0],["righteous","Righteous","Righteous","Fun",400,0],
+  ["lobster","Lobster","Lobster","Fun",400,0],["caveat","Caveat","Caveat","Fun",700,0,0.5],["pixel","Press Start 2P","Press Start 2P","Fun",400,0,0.4]
+].map(([id, label, family, group, weight, text, adjust]) => ({ id, label, family, group, weight, text: !!text, adjust }));
+const FONT_GROUPS = ["Flaw Patrol", "Easy reading", "Open Foundry", "Fun"];
+const fontById = (id) => FONT_LIST.find((f) => f.id === id);
+const fam = (f) => f.family === "system-ui" ? "system-ui, sans-serif" : `"${f.family}", system-ui, sans-serif`;
+
+let look = Object.assign({ mode: "system", color: "weather", body: "weather", heading: "weather" }, store.get(LK) || {});
+const darkMQ = window.matchMedia("(prefers-color-scheme: dark)");
+
+function palette(dark) {
+  if (look.color === "weather") return null;              // the CSS defaults
+  const m = MULTI[look.color];
+  if (m) return m[dark ? "dark" : "light"];
+  const a = ACCENT_HUES.find((x) => x.id === look.color);
+  if (!a) return null;
+  const h = a.hue;
+  return dark
+    ? { bg: `oklch(14% .035 ${h})`, surface: `oklch(19.5% .03 ${h})`, fg: `oklch(96.8% .007 ${h})`, muted: `oklch(72% .04 ${h})`, line: `oklch(29% .041 ${h})`, accent: `oklch(.78 .13 ${h})` }
+    : { bg: `oklch(96.8% .014 ${h})`, surface: `oklch(99.6% .004 ${h})`, fg: `oklch(20.8% .042 ${h})`, muted: `oklch(50% .046 ${h})`, line: `oklch(91% .02 ${h})`, accent: `oklch(.51 .2 ${h})` };
+}
+
+function applyLook() {
+  const root = document.documentElement, st = root.style;
+  const dark = look.mode === "dark" || (look.mode === "system" && darkMQ.matches);
+  ["--bg", "--surface", "--fg", "--muted", "--line", "--accent", "--bar", "--bar-fg", "--bar-muted", "--body", "--display", "--display-adjust"].forEach((k) => st.removeProperty(k));
+  // Explicit light/dark beats the phone's setting: switch the default tokens by attribute.
+  root.dataset.theme = dark ? "dark" : "light";
+  st.colorScheme = dark ? "dark" : "light";
+  const p = palette(dark);
+  if (p) {
+    st.setProperty("--bg", p.bg); st.setProperty("--surface", p.surface); st.setProperty("--fg", p.fg);
+    st.setProperty("--muted", p.muted); st.setProperty("--line", p.line); st.setProperty("--accent", p.accent);
+    if (p.bar) { st.setProperty("--bar", p.bar); st.setProperty("--bar-fg", p.barFg); st.setProperty("--bar-muted", p.barMuted); }
+  }
+  document.querySelector("header").classList.toggle("banded", !!p?.bar);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = getComputedStyle(document.body).backgroundColor;
+  const b = fontById(look.body), h = look.heading === "body" ? b : fontById(look.heading);
+  if (b) st.setProperty("--body", fam(b));
+  if (h) { st.setProperty("--display", fam(h)); if (h.adjust) st.setProperty("--display-adjust", h.adjust); }
+  else if (look.heading === "body" && !b) st.setProperty("--display", "var(--body)");
+}
+darkMQ.addEventListener?.("change", () => look.mode === "system" && applyLook());
+
+function saveLook(change) {
+  look = { ...look, ...change };
+  store.set(LK, look);
+  applyLook();
+  openLook();      // redraw the sheet so the pressed state follows
+}
+
+function openLook() {
+  const chip = (attrs, inner, on, plain) => `<button type="button" class="chip${plain ? " plain" : ""}" aria-pressed="${on}" ${attrs}>${inner}</button>`;
+  const dark = look.mode === "dark" || (look.mode === "system" && darkMQ.matches);
+  const sw = (cols) => `<span class="swatch">${cols.map((c) => `<span style="background:${c}"></span>`).join("")}</span>`;
+  const fontOptions = (val, bodyOnly, withSame) => `
+    <option value="weather"${val === "weather" ? " selected" : ""}>Local Weather (default)</option>
+    ${withSame ? `<option value="body"${val === "body" ? " selected" : ""}>Same as text</option>` : ""}
+    ${FONT_GROUPS.map((g) => `<optgroup label="${g}">${FONT_LIST.filter((f) => f.group === g && (!bodyOnly || f.text)).map((f) => `<option value="${f.id}"${val === f.id ? " selected" : ""}>${f.label}</option>`).join("")}</optgroup>`).join("")}`;
+  const prev = (id, sample) => { const f = id === "body" ? fontById(look.body) : fontById(id); return `<div class="font-prev" style="font-family:${f ? fam(f).replace(/"/g, "&quot;") : "var(--body)"}">${sample}</div>`; };
+  $("explainBody").innerHTML = `
+    <div><h3 id="explainTitle">Look</h3><div class="aka">The same colors and fonts as Flaw Patrol. Saved on this phone.</div></div>
+    <section class="look-sec"><h4>Mode</h4><div class="chips">
+      ${[["light", "Light"], ["dark", "Dark"], ["system", "Match my phone"]].map(([id, l]) => chip(`data-look-mode="${id}"`, l, look.mode === id, true)).join("")}
+    </div></section>
+    <section class="look-sec"><h4>Colors</h4>
+      <div class="chips">${chip('data-look-color="weather"', `<span class="dot" style="background:${dark ? "#6db7ea" : "#1d6fa5"}"></span>Local Weather`, look.color === "weather")}
+      ${ACCENT_HUES.map((a) => chip(`data-look-color="${a.id}"`, `<span class="dot" style="background:oklch(.51 .2 ${a.hue})"></span>${a.label}`, look.color === a.id)).join("")}</div>
+      <p class="sub-h">Two colors: one for the page, one for the panels</p>
+      <div class="chips">${Object.entries(MULTI).filter(([, m]) => m.colors === 2).map(([id, m]) => chip(`data-look-color="${id}" title="${m.sub}"`, `${sw([m[dark ? "dark" : "light"].bg, m[dark ? "dark" : "light"].surface])}${m.label}`, look.color === id)).join("")}</div>
+      <p class="sub-h">Three colors: a bold top bar, a page color and a panel color</p>
+      <div class="chips">${Object.entries(MULTI).filter(([, m]) => m.colors === 3).map(([id, m]) => { const c = m[dark ? "dark" : "light"]; return chip(`data-look-color="${id}" title="${m.sub}"`, `${sw([c.bar, c.bg, c.surface])}${m.label}`, look.color === id); }).join("")}</div>
+    </section>
+    <section class="look-sec"><h4>Fonts</h4>
+      <div class="font-grid">
+        <label>Text font<select id="lookBody">${fontOptions(look.body, true, false)}</select>${prev(look.body, "Mostly sunny · wind NE 5 mph · 0123")}</label>
+        <label>Numbers and headings<select id="lookHeading">${fontOptions(look.heading, false, true)}</select>${prev(look.heading, "74° Garden Grove")}</label>
+      </div>
+    </section>
+    <button type="button" class="close" id="explainClose">Done</button>`;
+  $("explainClose").onclick = () => $("explain").close();
+  $("explainBody").querySelectorAll("[data-look-mode]").forEach((b) => (b.onclick = () => saveLook({ mode: b.dataset.lookMode })));
+  $("explainBody").querySelectorAll("[data-look-color]").forEach((b) => (b.onclick = () => saveLook({ color: b.dataset.lookColor })));
+  $("lookBody").onchange = (e) => saveLook({ body: e.target.value });
+  $("lookHeading").onchange = (e) => saveLook({ heading: e.target.value });
+  if (!$("explain").open) $("explain").showModal();
+}
+
 // ---------- rendering ----------
 const fmtHour = (d) => d.toLocaleTimeString(undefined, { hour: "numeric" });
 const fmtTime = (d) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
@@ -351,33 +640,34 @@ function render() {
   const c = d.current;
 
   const stats = [
-    ["Wind", c.windKmh != null ? `${c.windDir ? c.windDir + " " : ""}${wind(c.windKmh)}` : "–"],
-    ["Gusts", wind(c.gustKmh)],
-    ["Humidity", c.humidity != null ? Math.round(c.humidity) + "%" : "–"],
-    ["Dew point", t(c.dewC)],
-    ["Pressure", pres(c.pressureHpa)],
-    ["Visibility", vis(c.visKm)]
-  ].filter(([, v]) => v !== "–");
+    ["wind", "Wind", c.windKmh != null ? `${c.windDir ? c.windDir + " " : ""}${wind(c.windKmh)}` : "–"],
+    ["gusts", "Gusts", wind(c.gustKmh)],
+    ["humidity", "Humidity", c.humidity != null ? Math.round(c.humidity) + "%" : "–"],
+    ["dew", "Dew point", t(c.dewC)],
+    ["pressure", "Pressure", pres(c.pressureHpa)],
+    ["visibility", "Visibility", vis(c.visKm)]
+  ].filter(([, , v]) => v !== "–");
 
-  const alerts = d.alerts.length ? `<section class="alerts" aria-label="Weather alerts">${d.alerts.map((a) => `
+  const alerts = d.alerts.length ? `<section class="alerts" aria-label="Weather alerts"><div class="hint">${termBtn("alerts", "What do advisories, watches and warnings mean?")}</div>${d.alerts.map((a) => `
     <details class="alert"><summary>${esc(a.event)}${a.ends ? ` until ${esc(new Date(a.ends).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" }))}` : ""}</summary>
     <p>${esc(a.text || a.headline)}</p></details>`).join("")}</section>` : "";
 
   $("app").innerHTML = `
   ${alerts}
   <section class="panel now" aria-label="Current conditions">
-    <div class="big">${t(c.tempC).replace("°", "")}<sup>°${units}</sup></div>
+    <div class="big">${termBtn("temp", t(c.tempC).replace("°", ""))}<sup>°${units}</sup></div>
     <div>
       <div class="desc">${iconFor(c.desc, c.isDay).replace('class="icon"', 'class="icon lg"')}<span>${esc(c.desc)}</span></div>
-      ${c.feelsC != null && Math.abs(c.feelsC - c.tempC) >= 1 ? `<div class="feels">Feels like ${t(c.feelsC)}</div>` : ""}
-      ${(() => { const hl = [d.days[0]?.hiC != null && "High " + t(d.days[0].hiC), d.days[0]?.loC != null && "Low " + t(d.days[0].loC)].filter(Boolean).join(" · "); return hl ? `<div class="feels">${hl}</div>` : ""; })()}
+      ${c.feelsC != null && Math.abs(c.feelsC - c.tempC) >= 1 ? `<div class="feels">${termBtn("feels", "Feels like")} ${t(c.feelsC)}</div>` : ""}
+      ${(() => { const hl = [d.days[0]?.hiC != null && "High " + t(d.days[0].hiC), d.days[0]?.loC != null && "Low " + t(d.days[0].loC)].filter(Boolean).join(" · "); return hl ? `<div class="feels">${termBtn("hilo", hl)}</div>` : ""; })()}
     </div>
-    ${stats.length ? `<div class="stats">${stats.map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`).join("")}</div>` : ""}
-    <div class="obs">${c.station ? `Measured at ${esc(c.station)} at ${fmtTime(c.observedAt)}` : "Current values from the forecast model (no recent station report nearby)"}</div>
+    ${stats.length ? `<div class="stats">${stats.map(([key, k, v]) => `<div class="stat"><div class="k">${termBtn(key, k)}</div><div class="v">${esc(v)}</div></div>`).join("")}</div>` : ""}
+    <div class="obs">${c.station ? `${termBtn("station", "Measured")} at ${esc(c.station)} at ${fmtTime(c.observedAt)}` : `Current values from the forecast (${termBtn("station", "no recent station report")} nearby)`}</div>
   </section>
 
   <section class="panel" aria-label="Next 24 hours">
     <h2 class="label">Next 24 hours</h2>
+    <div class="hint">${termBtn("hourly", "Temperature line")} · blue % = ${termBtn("pop", "chance of rain")}</div>
     <div class="hourly-wrap">
       <div class="hourly">${d.hourly.map((h, i) => `<div class="hour"><div class="t">${i === 0 ? "Now" : fmtHour(h.time)}</div>${iconFor(h.desc, h.isDay)}<div class="temp">${t(h.tempC)}</div><div class="pop">${h.pop ? h.pop + "%" : ""}</div></div>`).join("")}</div>
       ${hourlyChart(d.hourly)}
@@ -386,17 +676,18 @@ function render() {
 
   <section class="panel" aria-label="7-day forecast">
     <h2 class="label">7-day forecast</h2>
+    <div class="hint">High and low each day · blue % = ${termBtn("pop", "chance of precipitation")}</div>
     <div class="days">${d.days.map((x) => `
       <div class="day">
         <div class="name">${esc(x.name)}</div>
         ${iconFor(x.desc, x.isDay !== false)}
         <div class="short">${esc(x.desc)}${x.pop ? ` <span class="pop">· ${x.pop}%</span>` : ""}</div>
         <div class="range">${x.hiC != null ? t(x.hiC) : ""}${x.loC != null ? ` <span class="lo">${t(x.loC)}</span>` : ""}</div>
-        ${x.detail || x.nightDetail ? `<details><summary>Forecaster notes</summary>${x.detail ? `<p>${esc(x.detail)}</p>` : ""}${x.nightDetail ? `<p>Night: ${esc(x.nightDetail)}</p>` : ""}</details>` : ""}
+        ${x.detail || x.nightDetail ? `<details><summary>Forecaster notes</summary><p>${termBtn("forecast", "Who writes these?")}</p>${x.detail ? `<p>${esc(x.detail)}</p>` : ""}${x.nightDetail ? `<p>Night: ${esc(x.nightDetail)}</p>` : ""}</details>` : ""}
       </div>`).join("")}</div>
   </section>`;
 
-  $("footer").innerHTML = `Source: <a href="${d.sourceLink}" target="_blank" rel="noopener">${esc(d.source)}</a> · ${esc(d.sourceNote)}${d.fallbackReason ? ` · ${esc(d.fallbackReason)}` : ""}`;
+  $("footer").innerHTML = `${termBtn("all", "What do all these words mean?")}<br><br>Source: <a href="${d.sourceLink}" target="_blank" rel="noopener">${esc(d.source)}</a> · ${esc(d.sourceNote)}${d.fallbackReason ? ` · ${esc(d.fallbackReason)}` : ""}`;
 }
 
 function renderError(msg, offerSearch = true) {
@@ -517,6 +808,8 @@ function reviveCache() {
   current = c.loc; lastData = d; render();
 }
 
+$("lookBtn").addEventListener("click", openLook);
+applyLook();
 $("unitBtn").addEventListener("click", () => { units = units === "F" ? "C" : "F"; store.set(LS.units, units); shareWithWidget(); render(); });
 $("locBtn").addEventListener("click", locate);
 $("refreshBtn").addEventListener("click", () => (current ? load() : locate()));

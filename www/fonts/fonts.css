@@ -1,0 +1,131 @@
+/* Bundled open-source fonts (from @fontsource, latin subset). Browsers only download a face when the page uses it. */
+@font-face{font-family:"Aileron";font-style:normal;font-weight:400;font-display:swap;src:url(./aileron-400.woff2) format("woff2")}
+@font-face{font-family:"Aileron";font-style:normal;font-weight:600;font-display:swap;src:url(./aileron-600.woff2) format("woff2")}
+@font-face{font-family:"Aileron";font-style:normal;font-weight:700;font-display:swap;src:url(./aileron-700.woff2) format("woff2")}
+@font-face{font-family:"Archivo";font-style:normal;font-weight:400;font-display:swap;src:url(./archivo-400.woff2) format("woff2")}
+@font-face{font-family:"Archivo";font-style:normal;font-weight:500;font-display:swap;src:url(./archivo-500.woff2) format("woff2")}
+@font-face{font-family:"Archivo";font-style:normal;font-weight:600;font-display:swap;src:url(./archivo-600.woff2) format("woff2")}
+@font-face{font-family:"Archivo";font-style:normal;font-weight:700;font-display:swap;src:url(./archivo-700.woff2) format("woff2")}
+@font-face{font-family:"Archivo";font-style:normal;font-weight:900;font-display:swap;src:url(./archivo-900.woff2) format("woff2")}
+@font-face{font-family:"Atkinson Hyperlegible Next";font-style:normal;font-weight:400;font-display:swap;src:url(./atkinson-hyperlegible-next-400.woff2) format("woff2")}
+@font-face{font-family:"Atkinson Hyperlegible Next";font-style:normal;font-weight:500;font-display:swap;src:url(./atkinson-hyperlegible-next-500.woff2) format("woff2")}
+@font-face{font-family:"Atkinson Hyperlegible Next";font-style:normal;font-weight:600;font-display:swap;src:url(./atkinson-hyperlegible-next-600.woff2) format("woff2")}
+@font-face{font-family:"Atkinson Hyperlegible Next";font-style:normal;font-weight:700;font-display:swap;src:url(./atkinson-hyperlegible-next-700.woff2) format("woff2")}
+@font-face{font-family:"Bagnard";font-style:normal;font-weight:400;font-display:swap;src:url(./bagnard-400.woff2) format("woff2")}
+@font-face{font-family:"Bluu Next";font-style:normal;font-weight:700;font-display:swap;src:url(./bluu-next-700.woff2) format("woff2")}
+@font-face{font-family:"Bricolage Grotesque";font-style:normal;font-weight:400;font-display:swap;src:url(./bricolage-grotesque-400.woff2) format("woff2")}
+@font-face{font-family:"Bricolage Grotesque";font-style:normal;font-weight:500;font-display:swap;src:url(./bricolage-grotesque-500.woff2) format("woff2")}
+@font-face{font-family:"Bricolage Grotesque";font-style:normal;font-weight:600;font-display:swap;src:url(./bricolage-grotesque-600.woff2) format("woff2")}
+@font-face{font-family:"Bricolage Grotesque";font-style:normal;font-weight:700;font-display:swap;src:url(./bricolage-grotesque-700.woff2) format("woff2")}
+@font-face{font-family:"Bungee";font-style:normal;font-weight:400;font-display:swap;src:url(./bungee-400.woff2) format("woff2")}
+@font-face{font-family:"Caveat";font-style:normal;font-weight:400;font-display:swap;src:url(./caveat-400.woff2) format("woff2")}
+@font-face{font-family:"Caveat";font-style:normal;font-weight:500;font-display:swap;src:url(./caveat-500.woff2) format("woff2")}
+@font-face{font-family:"Caveat";font-style:normal;font-weight:600;font-display:swap;src:url(./caveat-600.woff2) format("woff2")}
+@font-face{font-family:"Caveat";font-style:normal;font-weight:700;font-display:swap;src:url(./caveat-700.woff2) format("woff2")}
+@font-face{font-family:"Chakra Petch";font-style:normal;font-weight:400;font-display:swap;src:url(./chakra-petch-400.woff2) format("woff2")}
+@font-face{font-family:"Chakra Petch";font-style:normal;font-weight:500;font-display:swap;src:url(./chakra-petch-500.woff2) format("woff2")}
+@font-face{font-family:"Chakra Petch";font-style:normal;font-weight:600;font-display:swap;src:url(./chakra-petch-600.woff2) format("woff2")}
+@font-face{font-family:"Chakra Petch";font-style:normal;font-weight:700;font-display:swap;src:url(./chakra-petch-700.woff2) format("woff2")}
+@font-face{font-family:"Comic Neue";font-style:normal;font-weight:400;font-display:swap;src:url(./comic-neue-400.woff2) format("woff2")}
+@font-face{font-family:"Comic Neue";font-style:normal;font-weight:700;font-display:swap;src:url(./comic-neue-700.woff2) format("woff2")}
+@font-face{font-family:"Cooper Hewitt";font-style:normal;font-weight:400;font-display:swap;src:url(./cooper-hewitt-400.woff2) format("woff2")}
+@font-face{font-family:"Cooper Hewitt";font-style:normal;font-weight:500;font-display:swap;src:url(./cooper-hewitt-500.woff2) format("woff2")}
+@font-face{font-family:"Cooper Hewitt";font-style:normal;font-weight:600;font-display:swap;src:url(./cooper-hewitt-600.woff2) format("woff2")}
+@font-face{font-family:"Cooper Hewitt";font-style:normal;font-weight:700;font-display:swap;src:url(./cooper-hewitt-700.woff2) format("woff2")}
+@font-face{font-family:"Courier Prime";font-style:normal;font-weight:400;font-display:swap;src:url(./courier-prime-400.woff2) format("woff2")}
+@font-face{font-family:"Courier Prime";font-style:normal;font-weight:700;font-display:swap;src:url(./courier-prime-700.woff2) format("woff2")}
+@font-face{font-family:"DM Sans";font-style:normal;font-weight:400;font-display:swap;src:url(./dm-sans-400.woff2) format("woff2")}
+@font-face{font-family:"DM Sans";font-style:normal;font-weight:500;font-display:swap;src:url(./dm-sans-500.woff2) format("woff2")}
+@font-face{font-family:"DM Sans";font-style:normal;font-weight:600;font-display:swap;src:url(./dm-sans-600.woff2) format("woff2")}
+@font-face{font-family:"DM Sans";font-style:normal;font-weight:700;font-display:swap;src:url(./dm-sans-700.woff2) format("woff2")}
+@font-face{font-family:"DM Sans";font-style:normal;font-weight:900;font-display:swap;src:url(./dm-sans-900.woff2) format("woff2")}
+@font-face{font-family:"EB Garamond";font-style:normal;font-weight:400;font-display:swap;src:url(./eb-garamond-400.woff2) format("woff2")}
+@font-face{font-family:"EB Garamond";font-style:normal;font-weight:500;font-display:swap;src:url(./eb-garamond-500.woff2) format("woff2")}
+@font-face{font-family:"EB Garamond";font-style:normal;font-weight:600;font-display:swap;src:url(./eb-garamond-600.woff2) format("woff2")}
+@font-face{font-family:"EB Garamond";font-style:normal;font-weight:700;font-display:swap;src:url(./eb-garamond-700.woff2) format("woff2")}
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:400;font-display:swap;src:url(./fraunces-400.woff2) format("woff2")}
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:500;font-display:swap;src:url(./fraunces-500.woff2) format("woff2")}
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:600;font-display:swap;src:url(./fraunces-600.woff2) format("woff2")}
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:700;font-display:swap;src:url(./fraunces-700.woff2) format("woff2")}
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:900;font-display:swap;src:url(./fraunces-900.woff2) format("woff2")}
+@font-face{font-family:"Fredoka";font-style:normal;font-weight:400;font-display:swap;src:url(./fredoka-400.woff2) format("woff2")}
+@font-face{font-family:"Fredoka";font-style:normal;font-weight:500;font-display:swap;src:url(./fredoka-500.woff2) format("woff2")}
+@font-face{font-family:"Fredoka";font-style:normal;font-weight:600;font-display:swap;src:url(./fredoka-600.woff2) format("woff2")}
+@font-face{font-family:"Fredoka";font-style:normal;font-weight:700;font-display:swap;src:url(./fredoka-700.woff2) format("woff2")}
+@font-face{font-family:"Inter";font-style:normal;font-weight:400;font-display:swap;src:url(./inter-400.woff2) format("woff2")}
+@font-face{font-family:"Inter";font-style:normal;font-weight:500;font-display:swap;src:url(./inter-500.woff2) format("woff2")}
+@font-face{font-family:"Inter";font-style:normal;font-weight:600;font-display:swap;src:url(./inter-600.woff2) format("woff2")}
+@font-face{font-family:"Inter";font-style:normal;font-weight:700;font-display:swap;src:url(./inter-700.woff2) format("woff2")}
+@font-face{font-family:"Inter";font-style:normal;font-weight:900;font-display:swap;src:url(./inter-900.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:400;font-display:swap;src:url(./jetbrains-mono-400.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:500;font-display:swap;src:url(./jetbrains-mono-500.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:600;font-display:swap;src:url(./jetbrains-mono-600.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:700;font-display:swap;src:url(./jetbrains-mono-700.woff2) format("woff2")}
+@font-face{font-family:"Lato";font-style:normal;font-weight:400;font-display:swap;src:url(./lato-400.woff2) format("woff2")}
+@font-face{font-family:"Lato";font-style:normal;font-weight:700;font-display:swap;src:url(./lato-700.woff2) format("woff2")}
+@font-face{font-family:"Lato";font-style:normal;font-weight:900;font-display:swap;src:url(./lato-900.woff2) format("woff2")}
+@font-face{font-family:"League Gothic";font-style:normal;font-weight:400;font-display:swap;src:url(./league-gothic-400.woff2) format("woff2")}
+@font-face{font-family:"Lexend";font-style:normal;font-weight:400;font-display:swap;src:url(./lexend-400.woff2) format("woff2")}
+@font-face{font-family:"Lexend";font-style:normal;font-weight:500;font-display:swap;src:url(./lexend-500.woff2) format("woff2")}
+@font-face{font-family:"Lexend";font-style:normal;font-weight:600;font-display:swap;src:url(./lexend-600.woff2) format("woff2")}
+@font-face{font-family:"Lexend";font-style:normal;font-weight:700;font-display:swap;src:url(./lexend-700.woff2) format("woff2")}
+@font-face{font-family:"Lexend";font-style:normal;font-weight:900;font-display:swap;src:url(./lexend-900.woff2) format("woff2")}
+@font-face{font-family:"Libre Baskerville";font-style:normal;font-weight:400;font-display:swap;src:url(./libre-baskerville-400.woff2) format("woff2")}
+@font-face{font-family:"Libre Baskerville";font-style:normal;font-weight:500;font-display:swap;src:url(./libre-baskerville-500.woff2) format("woff2")}
+@font-face{font-family:"Libre Baskerville";font-style:normal;font-weight:600;font-display:swap;src:url(./libre-baskerville-600.woff2) format("woff2")}
+@font-face{font-family:"Libre Baskerville";font-style:normal;font-weight:700;font-display:swap;src:url(./libre-baskerville-700.woff2) format("woff2")}
+@font-face{font-family:"Lobster";font-style:normal;font-weight:400;font-display:swap;src:url(./lobster-400.woff2) format("woff2")}
+@font-face{font-family:"Nunito";font-style:normal;font-weight:400;font-display:swap;src:url(./nunito-400.woff2) format("woff2")}
+@font-face{font-family:"Nunito";font-style:normal;font-weight:500;font-display:swap;src:url(./nunito-500.woff2) format("woff2")}
+@font-face{font-family:"Nunito";font-style:normal;font-weight:600;font-display:swap;src:url(./nunito-600.woff2) format("woff2")}
+@font-face{font-family:"Nunito";font-style:normal;font-weight:700;font-display:swap;src:url(./nunito-700.woff2) format("woff2")}
+@font-face{font-family:"Nunito";font-style:normal;font-weight:900;font-display:swap;src:url(./nunito-900.woff2) format("woff2")}
+@font-face{font-family:"Open Sans";font-style:normal;font-weight:400;font-display:swap;src:url(./open-sans-400.woff2) format("woff2")}
+@font-face{font-family:"Open Sans";font-style:normal;font-weight:500;font-display:swap;src:url(./open-sans-500.woff2) format("woff2")}
+@font-face{font-family:"Open Sans";font-style:normal;font-weight:600;font-display:swap;src:url(./open-sans-600.woff2) format("woff2")}
+@font-face{font-family:"Open Sans";font-style:normal;font-weight:700;font-display:swap;src:url(./open-sans-700.woff2) format("woff2")}
+@font-face{font-family:"OpenDyslexic";font-style:normal;font-weight:400;font-display:swap;src:url(./opendyslexic-400.woff2) format("woff2")}
+@font-face{font-family:"OpenDyslexic";font-style:normal;font-weight:700;font-display:swap;src:url(./opendyslexic-700.woff2) format("woff2")}
+@font-face{font-family:"Ostrich Sans";font-style:normal;font-weight:400;font-display:swap;src:url(./ostrich-sans-400.woff2) format("woff2")}
+@font-face{font-family:"Ostrich Sans";font-style:normal;font-weight:700;font-display:swap;src:url(./ostrich-sans-700.woff2) format("woff2")}
+@font-face{font-family:"Ostrich Sans";font-style:normal;font-weight:900;font-display:swap;src:url(./ostrich-sans-900.woff2) format("woff2")}
+@font-face{font-family:"Oswald";font-style:normal;font-weight:400;font-display:swap;src:url(./oswald-400.woff2) format("woff2")}
+@font-face{font-family:"Oswald";font-style:normal;font-weight:500;font-display:swap;src:url(./oswald-500.woff2) format("woff2")}
+@font-face{font-family:"Oswald";font-style:normal;font-weight:600;font-display:swap;src:url(./oswald-600.woff2) format("woff2")}
+@font-face{font-family:"Oswald";font-style:normal;font-weight:700;font-display:swap;src:url(./oswald-700.woff2) format("woff2")}
+@font-face{font-family:"Playfair Display";font-style:normal;font-weight:400;font-display:swap;src:url(./playfair-display-400.woff2) format("woff2")}
+@font-face{font-family:"Playfair Display";font-style:normal;font-weight:500;font-display:swap;src:url(./playfair-display-500.woff2) format("woff2")}
+@font-face{font-family:"Playfair Display";font-style:normal;font-weight:600;font-display:swap;src:url(./playfair-display-600.woff2) format("woff2")}
+@font-face{font-family:"Playfair Display";font-style:normal;font-weight:700;font-display:swap;src:url(./playfair-display-700.woff2) format("woff2")}
+@font-face{font-family:"Playfair Display";font-style:normal;font-weight:900;font-display:swap;src:url(./playfair-display-900.woff2) format("woff2")}
+@font-face{font-family:"Poppins";font-style:normal;font-weight:400;font-display:swap;src:url(./poppins-400.woff2) format("woff2")}
+@font-face{font-family:"Poppins";font-style:normal;font-weight:500;font-display:swap;src:url(./poppins-500.woff2) format("woff2")}
+@font-face{font-family:"Poppins";font-style:normal;font-weight:600;font-display:swap;src:url(./poppins-600.woff2) format("woff2")}
+@font-face{font-family:"Poppins";font-style:normal;font-weight:700;font-display:swap;src:url(./poppins-700.woff2) format("woff2")}
+@font-face{font-family:"Poppins";font-style:normal;font-weight:900;font-display:swap;src:url(./poppins-900.woff2) format("woff2")}
+@font-face{font-family:"Press Start 2P";font-style:normal;font-weight:400;font-display:swap;src:url(./press-start-2p-400.woff2) format("woff2")}
+@font-face{font-family:"Quicksand";font-style:normal;font-weight:400;font-display:swap;src:url(./quicksand-400.woff2) format("woff2")}
+@font-face{font-family:"Quicksand";font-style:normal;font-weight:500;font-display:swap;src:url(./quicksand-500.woff2) format("woff2")}
+@font-face{font-family:"Quicksand";font-style:normal;font-weight:600;font-display:swap;src:url(./quicksand-600.woff2) format("woff2")}
+@font-face{font-family:"Quicksand";font-style:normal;font-weight:700;font-display:swap;src:url(./quicksand-700.woff2) format("woff2")}
+@font-face{font-family:"Righteous";font-style:normal;font-weight:400;font-display:swap;src:url(./righteous-400.woff2) format("woff2")}
+@font-face{font-family:"Roboto";font-style:normal;font-weight:400;font-display:swap;src:url(./roboto-400.woff2) format("woff2")}
+@font-face{font-family:"Roboto";font-style:normal;font-weight:500;font-display:swap;src:url(./roboto-500.woff2) format("woff2")}
+@font-face{font-family:"Roboto";font-style:normal;font-weight:600;font-display:swap;src:url(./roboto-600.woff2) format("woff2")}
+@font-face{font-family:"Roboto";font-style:normal;font-weight:700;font-display:swap;src:url(./roboto-700.woff2) format("woff2")}
+@font-face{font-family:"Roboto";font-style:normal;font-weight:900;font-display:swap;src:url(./roboto-900.woff2) format("woff2")}
+@font-face{font-family:"Space Grotesk";font-style:normal;font-weight:400;font-display:swap;src:url(./space-grotesk-400.woff2) format("woff2")}
+@font-face{font-family:"Space Grotesk";font-style:normal;font-weight:500;font-display:swap;src:url(./space-grotesk-500.woff2) format("woff2")}
+@font-face{font-family:"Space Grotesk";font-style:normal;font-weight:600;font-display:swap;src:url(./space-grotesk-600.woff2) format("woff2")}
+@font-face{font-family:"Space Grotesk";font-style:normal;font-weight:700;font-display:swap;src:url(./space-grotesk-700.woff2) format("woff2")}
+@font-face{font-family:"Work Sans";font-style:normal;font-weight:400;font-display:swap;src:url(./work-sans-400.woff2) format("woff2")}
+@font-face{font-family:"Work Sans";font-style:normal;font-weight:500;font-display:swap;src:url(./work-sans-500.woff2) format("woff2")}
+@font-face{font-family:"Work Sans";font-style:normal;font-weight:600;font-display:swap;src:url(./work-sans-600.woff2) format("woff2")}
+@font-face{font-family:"Work Sans";font-style:normal;font-weight:700;font-display:swap;src:url(./work-sans-700.woff2) format("woff2")}
+@font-face{font-family:"Work Sans";font-style:normal;font-weight:900;font-display:swap;src:url(./work-sans-900.woff2) format("woff2")}
+@font-face{font-family:"Young Serif";font-style:normal;font-weight:400;font-display:swap;src:url(./young-serif-400.woff2) format("woff2")}
+@font-face{font-family:"Barlow Semi Condensed";font-style:normal;font-weight:400;font-display:swap;src:url(./barlow-semi-condensed-400.woff2) format("woff2")}
+@font-face{font-family:"Barlow Semi Condensed";font-style:normal;font-weight:500;font-display:swap;src:url(./barlow-semi-condensed-500.woff2) format("woff2")}
+@font-face{font-family:"Barlow Semi Condensed";font-style:normal;font-weight:600;font-display:swap;src:url(./barlow-semi-condensed-600.woff2) format("woff2")}
+@font-face{font-family:"Barlow Semi Condensed";font-style:normal;font-weight:700;font-display:swap;src:url(./barlow-semi-condensed-700.woff2) format("woff2")}
+@font-face{font-family:"Barlow Semi Condensed";font-style:normal;font-weight:900;font-display:swap;src:url(./barlow-semi-condensed-900.woff2) format("woff2")}
