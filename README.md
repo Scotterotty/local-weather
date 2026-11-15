@@ -4,6 +4,10 @@ Weather for exactly where you are. In the US it uses the National Weather Servic
 
 The app is one web page (`www/index.html`) wrapped as a native iOS and Android app with [Capacitor](https://capacitorjs.com/). On a phone it uses the native GPS.
 
+## Web version
+
+https://scotterotty.github.io/local-weather/
+
 ## Install on Android
 
 Every push to `main` builds an APK. On your phone, open this repo's **Releases** page, open **Latest Android build**, and tap `local-weather.apk`. Android will ask you to allow installs from your browser the first time.
@@ -18,7 +22,7 @@ Apple only allows installing apps you build yourself through Xcode on a Mac:
 
 A free Apple ID works, but the app has to be reinstalled every 7 days. A paid Apple Developer account ($99/yr) removes that limit and allows TestFlight.
 
-Without a Mac, open the web version (GitHub Pages link in the repo's About section) in Safari and use Share > Add to Home Screen.
+Without a Mac, open the web version at https://scotterotty.github.io/local-weather/ in Safari and use Share > Add to Home Screen.
 
 ## Develop
 
