@@ -498,6 +498,10 @@ function moonIcon(m, size = 28) {
 }
 
 // ---------- radar ----------
+// Base map: Esri's gray canvas (no API key). Labels go in a separate layer drawn above the radar so towns stay readable.
+const esri = (name) => `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${name}/MapServer/tile/{z}/{y}/{x}`;
+const baseUrlFor = (dark) => esri(dark ? "World_Dark_Gray_Base" : "World_Light_Gray_Base");
+const labelUrlFor = (dark) => esri(dark ? "World_Dark_Gray_Reference" : "World_Light_Gray_Reference");
 // NOAA NEXRAD national composite (base reflectivity), rebuilt every 5 minutes by the Iowa Environmental Mesonet.
 const RADAR_FRAMES = [50, 45, 40, 35, 30, 25, 20, 15, 10, 5, 0];
 const radarTileUrl = (m) => `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913${m ? `-m${String(m).padStart(2, "0")}m` : ""}/{z}/{x}/{y}.png`;
@@ -551,11 +555,15 @@ function mountRadar() {
   slot.replaceWith(el);
   if (typeof L === "undefined") { $("radarNote").hidden = false; $("radarNote").textContent = "The map couldn't load."; return; }
   const dark = document.documentElement.dataset.theme === "dark";
-  const baseUrl = `https://{s}.basemaps.cartocdn.com/${dark ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`;
+  const baseUrl = baseUrlFor(dark);
   if (!radar.map) {
     radar.map = L.map($("radarMap"), { zoomControl: true, scrollWheelZoom: false, attributionControl: true, maxZoom: 11, minZoom: 4 })
       .setView([current.lat, current.lon], 8);
-    radar.base = L.tileLayer(baseUrl, { subdomains: "abcd", maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> · Radar: NOAA via <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">IEM</a>' }).addTo(radar.map);
+    radar.base = L.tileLayer(baseUrl, { maxZoom: 16, attribution: 'Map &copy; <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>, HERE, Garmin, &copy; OpenStreetMap · Radar: NOAA via <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">IEM</a>' }).addTo(radar.map);
+    radar.map.createPane("labels");
+    radar.map.getPane("labels").style.zIndex = 650;
+    radar.map.getPane("labels").style.pointerEvents = "none";
+    radar.labels = L.tileLayer(labelUrlFor(dark), { maxZoom: 16, pane: "labels" }).addTo(radar.map);
     radar.layers = RADAR_FRAMES.map((m) => L.tileLayer(radarTileUrl(m), { opacity: 0, maxNativeZoom: 10, maxZoom: 11, zIndex: 5 }).addTo(radar.map));
     radar.marker = L.circleMarker([current.lat, current.lon], { radius: 6, weight: 2, color: "#fff", fillColor: getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#1d6fa5", fillOpacity: 1 }).addTo(radar.map);
     $("radarSlider").addEventListener("input", (e) => { playRadar(false); showFrame(+e.target.value); });
@@ -564,6 +572,7 @@ function mountRadar() {
     playRadar(!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   } else {
     radar.base.setUrl(baseUrl);
+    radar.labels.setUrl(labelUrlFor(dark));
     radar.marker.setLatLng([current.lat, current.lon]);
     // Refresh radar tiles every time the forecast refreshes (frames are relative to "now").
     radar.layers.forEach((l) => l.redraw());
@@ -821,7 +830,7 @@ function applyLook() {
     if (p.bar) { st.setProperty("--bar", p.bar); st.setProperty("--bar-fg", p.barFg); st.setProperty("--bar-muted", p.barMuted); }
   }
   document.querySelector("header").classList.toggle("banded", !!p?.bar);
-  if (radar?.base) radar.base.setUrl(`https://{s}.basemaps.cartocdn.com/${dark ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`);
+  if (radar?.base) { radar.base.setUrl(baseUrlFor(dark)); radar.labels.setUrl(labelUrlFor(dark)); }
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = getComputedStyle(document.body).backgroundColor;
   const b = fontById(look.body), h = look.heading === "body" ? b : fontById(look.heading === "weather" && sty.heading ? sty.heading : look.heading);
