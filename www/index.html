@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#0f2a3d">
 <title>Local Weather</title>
 <link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<script src="vendor/leaflet/leaflet.js"></script>
 <style>
 /* Layout: one column, "now" block first, then hourly strip, then 7-day list. */
 :root {
@@ -108,6 +110,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .results button { width: 100%; text-align: left; margin-top: 6px; }
 footer { color: var(--muted); font-size: .75rem; text-align: center; }
 footer .term { font-size: .8rem; }
+
+/* Radar */
+.radar-map { height: 340px; border-radius: 10px; overflow: hidden; background: var(--line); margin: 0 -4px; }
+@media (max-width: 420px) { .radar-map { height: 300px; } }
+.radar-bar { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.radar-bar .when { font: 500 .95rem var(--display); font-variant-numeric: tabular-nums; min-width: 6.5rem; }
+.radar-bar input[type=range] { flex: 1 1 140px; accent-color: var(--accent); min-width: 0; }
+.radar-legend { margin-top: 10px; display: grid; gap: 4px; }
+.radar-legend .ramp { height: 10px; border-radius: 5px; background: linear-gradient(90deg, #04e9e7 0%, #019ff4 12%, #02fd02 22%, #01c501 32%, #008e00 40%, #fdf802 50%, #e5bc00 57%, #fd9500 64%, #fd0000 72%, #d40000 79%, #bc0000 85%, #f800fd 92%, #9854c6 100%); }
+.radar-legend .words { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); }
+.radar-note { font-size: .8rem; color: var(--muted); margin: 8px 0 0; }
+.leaflet-container { font: .7rem var(--body); background: var(--line); }
+.leaflet-control-attribution { background: color-mix(in srgb, var(--surface) 80%, transparent) !important; color: var(--muted) !important; }
+.leaflet-control-attribution a { color: var(--accent) !important; }
 
 /* Look sheet */
 .look-sec { display: grid; gap: 8px; }
@@ -396,6 +412,86 @@ function moonIcon(m, size = 28) {
   return `<svg class="moon" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${cx}" cy="${cy}" r="${r}" fill="var(--line)"/><path d="${d}" fill="var(--moonlit)"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--muted)" stroke-opacity=".35"/></svg>`;
 }
 
+// ---------- radar ----------
+// NOAA NEXRAD national composite (base reflectivity), rebuilt every 5 minutes by the Iowa Environmental Mesonet.
+const RADAR_FRAMES = [50, 45, 40, 35, 30, 25, 20, 15, 10, 5, 0];
+const radarTileUrl = (m) => `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913${m ? `-m${String(m).padStart(2, "0")}m` : ""}/{z}/{x}/{y}.png`;
+let radar = null;   // { el, map, base, layers, marker, idx, timer, playing }
+
+function radarPanel() {
+  if (radar) return radar.el;
+  const el = document.createElement("section");
+  el.className = "panel";
+  el.setAttribute("aria-label", "Radar");
+  el.innerHTML = `
+    <h2 class="label">Radar</h2>
+    <div class="hint">${termBtn("radar", "What the colors mean")} · last 50 minutes</div>
+    <div class="radar-map" id="radarMap" role="img" aria-label="Radar map of rain and snow near you"></div>
+    <div class="radar-bar">
+      <button type="button" id="radarPlay">Pause</button>
+      <input type="range" id="radarSlider" min="0" max="${RADAR_FRAMES.length - 1}" value="${RADAR_FRAMES.length - 1}" aria-label="Radar time">
+      <span class="when" id="radarWhen">Latest</span>
+    </div>
+    <div class="radar-legend" aria-hidden="true"><div class="ramp"></div>
+      <div class="words"><span>Drizzle</span><span>Light rain</span><span>Heavy rain</span><span>Storms</span><span>Hail</span></div></div>
+    <p class="radar-note" id="radarNote" hidden></p>`;
+  radar = { el, map: null, layers: [], idx: RADAR_FRAMES.length - 1, timer: null, playing: false };
+  return el;
+}
+
+function showFrame(i) {
+  radar.idx = i;
+  radar.layers.forEach((l, j) => l.setOpacity(j === i ? 0.75 : 0));
+  const m = RADAR_FRAMES[i];
+  $("radarWhen").textContent = m === 0 ? "Latest" : `${m} min earlier`;
+  $("radarSlider").value = i;
+}
+function playRadar(on) {
+  radar.playing = on;
+  $("radarPlay").textContent = on ? "Pause" : "Play";
+  clearTimeout(radar.timer);
+  if (!on) return;
+  const step = () => {
+    const next = (radar.idx + 1) % RADAR_FRAMES.length;
+    showFrame(next);
+    radar.timer = setTimeout(step, next === RADAR_FRAMES.length - 1 ? 1800 : 550);   // pause on the latest frame
+  };
+  radar.timer = setTimeout(step, 700);
+}
+
+function mountRadar() {
+  const slot = $("radarSlot");
+  if (!slot) return;
+  const el = radarPanel();
+  slot.replaceWith(el);
+  if (typeof L === "undefined") { $("radarNote").hidden = false; $("radarNote").textContent = "The map couldn't load."; return; }
+  const dark = document.documentElement.dataset.theme === "dark";
+  const baseUrl = `https://{s}.basemaps.cartocdn.com/${dark ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`;
+  if (!radar.map) {
+    radar.map = L.map($("radarMap"), { zoomControl: true, scrollWheelZoom: false, attributionControl: true, maxZoom: 11, minZoom: 4 })
+      .setView([current.lat, current.lon], 8);
+    radar.base = L.tileLayer(baseUrl, { subdomains: "abcd", maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> · Radar: NOAA via <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">IEM</a>' }).addTo(radar.map);
+    radar.layers = RADAR_FRAMES.map((m) => L.tileLayer(radarTileUrl(m), { opacity: 0, maxNativeZoom: 10, maxZoom: 11, zIndex: 5 }).addTo(radar.map));
+    radar.marker = L.circleMarker([current.lat, current.lon], { radius: 6, weight: 2, color: "#fff", fillColor: getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#1d6fa5", fillOpacity: 1 }).addTo(radar.map);
+    $("radarSlider").addEventListener("input", (e) => { playRadar(false); showFrame(+e.target.value); });
+    $("radarPlay").addEventListener("click", () => playRadar(!radar.playing));
+    showFrame(RADAR_FRAMES.length - 1);
+    playRadar(!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  } else {
+    radar.base.setUrl(baseUrl);
+    radar.marker.setLatLng([current.lat, current.lon]);
+    // Refresh radar tiles every time the forecast refreshes (frames are relative to "now").
+    radar.layers.forEach((l) => l.redraw());
+  }
+  const inUS = lastData?.source === "National Weather Service";
+  $("radarNote").hidden = inUS;
+  if (!inUS) $("radarNote").textContent = "NEXRAD radar covers the United States. Outside the US the map may be blank.";
+  requestAnimationFrame(() => radar.map.invalidateSize());
+}
+function recenterRadar() {
+  if (radar?.map && current) radar.map.setView([current.lat, current.lon], radar.map.getZoom());
+}
+
 // ---------- icons ----------
 function iconFor(desc = "", isDay = true) {
   const s = desc.toLowerCase();
@@ -512,6 +608,13 @@ const TERMS = {
     extra: () => { const m = moonPhase(); return scaleList([["New moon", "Dark, rises with the sun"], ["First quarter", "Right half lit, high at sunset"], ["Full moon", "All lit, rises at sunset"], ["Last quarter", "Left half lit, up at dawn"]], ["New moon", "First quarter", "Full moon", "Last quarter"].indexOf(m.name)); },
     now: () => { const m = moonPhase(); return `${m.name}, ${Math.round(m.illum * 100)}% lit. ${m.waxing ? `Full moon in about ${Math.round(m.daysToFull)} day${Math.round(m.daysToFull) === 1 ? "" : "s"}.` : `New moon in about ${Math.round(m.daysToNew)} day${Math.round(m.daysToNew) === 1 ? "" : "s"}.`}`; }
   },
+  radar: {
+    title: "Weather radar",
+    aka: "NEXRAD: the National Weather Service's network of 160 Doppler radars",
+    what: "A radar dish sends out pulses of radio waves. When they hit raindrops, snowflakes or hail, some bounce back. The stronger the echo, the bigger or more numerous the drops, and the brighter the color. Blue and green are light rain, yellow and orange are heavy rain, red is very heavy rain with storms, and pink or purple usually means hail. Watching the animation shows which way the rain is moving.",
+    extra: () => scaleList([["Blue, green", "Drizzle to light rain"], ["Yellow", "Moderate rain"], ["Orange, red", "Heavy rain, thunderstorms"], ["Pink, purple", "Hail likely"]], -1),
+    now: () => "Each frame is 5 minutes apart and covers the last 50 minutes. Radar can't see very light drizzle close to the ground far from the radar, and sometimes shows birds or bugs as faint blue specks at night."
+  },
   station: {
     title: "Weather station",
     what: "A set of instruments (thermometer, wind vane, rain gauge, barometer) that reports what's actually happening outside. Many sit at airports, fire stations and schools. This app uses the nearest one that has reported in the last 90 minutes, so \"right now\" is a real measurement, not a prediction.",
@@ -548,7 +651,7 @@ function explain(key) {
   $("explainBody").scrollTop = 0;
 }
 function explainAll() {
-  const order = ["temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "visibility", "pop", "sunrise", "moon", "station", "forecast", "hourly", "alerts"];
+  const order = ["temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "visibility", "pop", "radar", "sunrise", "moon", "station", "forecast", "hourly", "alerts"];
   $("explainBody").innerHTML = `<div><h3 id="explainTitle">What the words mean</h3></div>
     <p>Tap any underlined word in the app to see what it means and what today's number tells you.</p>
     <div class="all">${order.map((k) => termBtn(k, TERMS[k].title)).join("")}</div>
@@ -618,6 +721,7 @@ function applyLook() {
     if (p.bar) { st.setProperty("--bar", p.bar); st.setProperty("--bar-fg", p.barFg); st.setProperty("--bar-muted", p.barMuted); }
   }
   document.querySelector("header").classList.toggle("banded", !!p?.bar);
+  if (radar?.base) radar.base.setUrl(`https://{s}.basemaps.cartocdn.com/${dark ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`);
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = getComputedStyle(document.body).backgroundColor;
   const b = fontById(look.body), h = look.heading === "body" ? b : fontById(look.heading);
@@ -731,6 +835,8 @@ function render() {
     <div class="obs">${c.station ? `${termBtn("station", "Measured")} at ${esc(c.station)} at ${fmtTime(c.observedAt)}` : `Current values from the forecast (${termBtn("station", "no recent station report")} nearby)`}</div>
   </section>
 
+  <div id="radarSlot"></div>
+
   <section class="panel" aria-label="Next 24 hours">
     <h2 class="label">Next 24 hours</h2>
     <div class="hint">${termBtn("hourly", "Temperature line")} · blue % = ${termBtn("pop", "chance of rain")}</div>
@@ -753,6 +859,7 @@ function render() {
       </div>`).join("")}</div>
   </section>`;
 
+  mountRadar();
   $("footer").innerHTML = `${termBtn("all", "What do all these words mean?")}<br><br>Source: <a href="${d.sourceLink}" target="_blank" rel="noopener">${esc(d.source)}</a> · ${esc(d.sourceNote)}${d.fallbackReason ? ` · ${esc(d.fallbackReason)}` : ""}`;
 }
 
@@ -824,6 +931,7 @@ function shareWithWidget() {
 
 function setLocation(loc) {
   current = loc;
+  recenterRadar();
   store.set(LS.last, loc);
   shareWithWidget();
   $("app").innerHTML = `<div class="panel state">Loading the forecast…</div>`;
