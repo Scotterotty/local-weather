@@ -62,7 +62,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .label { font: 600 .72rem var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
 
 .now { display: grid; grid-template-columns: auto 1fr; gap: 8px 20px; align-items: center; }
-.now .big, .day .range, .hour .temp, .stat .v { font-size-adjust: var(--display-adjust, none); }
+.now .big, .day .range, .hour .temp, .stat .s { font-size: .75rem; color: var(--muted); line-height: 1.3; }
+.aqi-dot { display: inline-block; width: .7em; height: .7em; border-radius: 50%; margin-right: 6px; vertical-align: .05em; box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 20%, transparent); }
+.stat .v { font-size-adjust: var(--display-adjust, none); }
 .now .big { font: 500 5rem/1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .now .big sup { font-size: .4em; vertical-align: top; position: relative; top: .35em; color: var(--muted); }
 .now .desc { font: 600 1.3rem/1.2 var(--display); display: flex; align-items: center; gap: 8px; }
@@ -220,7 +222,7 @@ footer a { color: var(--accent); }
     <div class="controls">
       <button id="lookBtn" type="button">Look</button>
       <button id="unitBtn" type="button" aria-label="Switch units">°F</button>
-      <button id="locBtn" type="button">Use my location</button>
+      <button id="locBtn" type="button">Location</button>
       <button id="refreshBtn" type="button">Refresh</button>
     </div>
   </header>
@@ -313,6 +315,38 @@ function distKm(a1, o1, a2, o2) {
   return 12742 * Math.asin(Math.sqrt(h));
 }
 
+// ---------- pressure level and trend ----------
+function pressureLevel(hpa) { return hpa == null ? null : hpa < 1009 ? "Low" : hpa > 1023 ? "High" : "Normal"; }
+function pressureTrend(now, ago) {
+  if (now == null || ago == null) return null;
+  const d = now - ago;                      // hPa over 3 hours (meteorologists' standard "tendency")
+  if (Math.abs(d) < 1) return { word: "steady", d };
+  if (d >= 3.5) return { word: "rising fast", d };
+  if (d > 0) return { word: "rising", d };
+  if (d <= -3.5) return { word: "falling fast", d };
+  return { word: "falling", d };
+}
+
+// ---------- air quality ----------
+// Open-Meteo's air-quality model (CAMS), reported on the US EPA AQI scale. No key needed.
+const AQI_LEVELS = [
+  [50, "Good", "#00b050", "Air is clean. Great day to be outside."],
+  [100, "Moderate", "#d4b300", "Fine for most people. Very sensitive people may want to take it easier outdoors."],
+  [150, "Unhealthy for sensitive groups", "#ff7e00", "Kids, older adults and people with asthma should cut back on long or hard outdoor play."],
+  [200, "Unhealthy", "#e8202a", "Everyone should take it easier outside. Sensitive groups should stay in."],
+  [300, "Very unhealthy", "#8f3f97", "Health alert. Everyone should limit time outdoors."],
+  [Infinity, "Hazardous", "#7e0023", "Emergency conditions. Stay indoors."]
+];
+const aqiLevel = (v) => AQI_LEVELS.find(([max]) => v <= max);
+async function loadAQI(lat, lon) {
+  const q = new URLSearchParams({ latitude: lat, longitude: lon, timezone: "auto", current: "us_aqi,pm2_5,ozone", hourly: "us_aqi", forecast_hours: 24 });
+  const d = await getJSON(`https://air-quality-api.open-meteo.com/v1/air-quality?${q}`);
+  const v = d.current?.us_aqi;
+  if (v == null) return null;
+  const peak = Math.max(...(d.hourly?.us_aqi || []).filter((x) => x != null), v);
+  return { value: Math.round(v), peak: Math.round(peak), pm25: d.current.pm2_5, ozone: d.current.ozone };
+}
+
 // National Weather Service (US only). Forecaster-reviewed grid forecast + real station observations.
 async function loadNWS(lat, lon) {
   const pt = await getJSON(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`);
@@ -357,6 +391,24 @@ async function loadNWS(lat, lon) {
     if (obs) break;
   }
 
+  // Pressure 3 hours ago at the same station, for rising/falling.
+  let pressure3hAgo = null;
+  if (obs) {
+    try {
+      const since = new Date(Date.now() - 4 * 36e5).toISOString().replace(/\.\d+Z$/, "Z");
+      const hist = await getJSON(`https://api.weather.gov/stations/${obs.st.stationIdentifier}/observations?start=${since}&limit=30`);
+      const target = new Date(obs.o.timestamp).getTime() - 3 * 36e5;
+      let best = null;
+      for (const f of hist.features || []) {
+        const pa = f.properties.barometricPressure?.value ?? f.properties.seaLevelPressure?.value;
+        if (pa == null) continue;
+        const dt = Math.abs(new Date(f.properties.timestamp).getTime() - target);
+        if (dt < 50 * 6e4 && (!best || dt < best.dt)) best = { dt, hpa: pa / 100 };
+      }
+      pressure3hAgo = best?.hpa ?? null;
+    } catch {}
+  }
+
   const h0 = hr.properties.periods[0];
   let cur;
   if (obs) {
@@ -367,7 +419,7 @@ async function loadNWS(lat, lon) {
       tempC, feelsC: feels, desc: o.textDescription || h0.shortForecast,
       humidity: o.relativeHumidity?.value, dewC: o.dewpoint?.value,
       windKmh: o.windSpeed?.value, windDir: compass(o.windDirection?.value), gustKmh: o.windGust?.value,
-      pressureHpa: o.barometricPressure?.value != null ? o.barometricPressure.value / 100 : null,
+      pressureHpa: o.barometricPressure?.value != null ? o.barometricPressure.value / 100 : null, pressure3hAgo,
       visKm: o.visibility?.value != null ? o.visibility.value / 1000 : null,
       observedAt: new Date(o.timestamp), station: `${obs.st.name} (${obs.st.stationIdentifier})`, stationKm: obs.km,
       official: /^[KP][A-Z0-9]{3}$/.test(obs.st.stationIdentifier),
@@ -423,9 +475,9 @@ const WMO = {
 };
 async function loadOpenMeteo(lat, lon) {
   const q = new URLSearchParams({
-    latitude: lat, longitude: lon, timezone: "auto", forecast_days: 8,
+    latitude: lat, longitude: lon, timezone: "auto", forecast_days: 8, past_hours: 4,
     current: "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,dew_point_2m,visibility,is_day",
-    hourly: "temperature_2m,precipitation_probability,weather_code,is_day,rain,showers,snowfall",
+    hourly: "temperature_2m,precipitation_probability,weather_code,is_day,rain,showers,snowfall,pressure_msl",
     daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,snowfall_sum"
   });
   const d = await getJSON(`https://api.open-meteo.com/v1/forecast?${q}`);
@@ -458,6 +510,7 @@ async function loadOpenMeteo(lat, lon) {
       tempC: c.temperature_2m, feelsC: c.apparent_temperature, desc: WMO[c.weather_code] || "",
       humidity: c.relative_humidity_2m, dewC: c.dew_point_2m, windKmh: c.wind_speed_10m,
       windDir: compass(c.wind_direction_10m), gustKmh: c.wind_gusts_10m, pressureHpa: c.pressure_msl,
+      pressure3hAgo: (() => { const i = d.hourly.time.findIndex((s) => Math.abs(toDate(s).getTime() - (now - 3 * 36e5)) < 36e5 / 2); return i >= 0 ? d.hourly.pressure_msl?.[i] ?? null : null; })(),
       visKm: c.visibility != null ? c.visibility / 1000 : null, observedAt: null, station: null, isDay: !!c.is_day
     },
     hourly, days, alerts: []
@@ -692,7 +745,15 @@ const TERMS = {
       const v = lastData?.current.pressureHpa;
       return scaleList([["Below 29.80", "Low. Unsettled, often stormy"], ["29.80–30.20", "Normal. Average is 29.92"], ["Above 30.20", "High. Usually clear and calm"]], v == null ? -1 : pickIdx(v * 0.02953, [29.8, 30.2]));
     },
-    now: (c) => c.pressureHpa == null ? null : `${pres(c.pressureHpa)}${units === "F" ? ` (${Math.round(c.pressureHpa)} hPa)` : ` (${(c.pressureHpa * 0.02953).toFixed(2)} inHg)`}.`
+    now: (c) => {
+      if (c.pressureHpa == null) return null;
+      const tr = pressureTrend(c.pressureHpa, c.pressure3hAgo);
+      const change = tr ? (units === "F" ? `${Math.abs(tr.d * 0.02953).toFixed(2)} inHg` : `${Math.abs(tr.d).toFixed(1)} hPa`) : "";
+      const what = !tr ? "" : tr.word === "steady" ? " It's been steady for the last 3 hours, so expect more of the same."
+        : tr.word.startsWith("rising") ? ` It has risen ${change} in the last 3 hours, which usually means clearing or calmer weather.${tr.word === "rising fast" ? " Rising this fast can bring gusty wind." : ""}`
+        : ` It has fallen ${change} in the last 3 hours, which often means clouds, wind or rain are on the way.${tr.word === "falling fast" ? " Falling this fast often means a storm is close." : ""}`;
+      return `${pres(c.pressureHpa)}${units === "F" ? ` (${Math.round(c.pressureHpa)} hPa)` : ` (${(c.pressureHpa * 0.02953).toFixed(2)} inHg)`}, which is ${pressureLevel(c.pressureHpa).toLowerCase()}.${what}`;
+    }
   },
   visibility: {
     title: "Visibility",
@@ -716,6 +777,13 @@ const TERMS = {
     what: "The moon doesn't make its own light. We see the half lit by the sun, and as the moon circles Earth every 29½ days we see more or less of that lit half. Waxing means the lit part is growing toward a full moon; waning means it's shrinking toward a new moon, when the moon is between us and the sun and we can't see it. The percentage is how much of the face is lit.",
     extra: () => { const m = moonPhase(); return scaleList([["New moon", "Dark, rises with the sun"], ["First quarter", "Right half lit, high at sunset"], ["Full moon", "All lit, rises at sunset"], ["Last quarter", "Left half lit, up at dawn"]], ["New moon", "First quarter", "Full moon", "Last quarter"].indexOf(m.name)); },
     now: () => { const m = moonPhase(); return `${m.name}, ${Math.round(m.illum * 100)}% lit. ${m.waxing ? `Full moon in about ${Math.round(m.daysToFull)} day${Math.round(m.daysToFull) === 1 ? "" : "s"}.` : `New moon in about ${Math.round(m.daysToNew)} day${Math.round(m.daysToNew) === 1 ? "" : "s"}.`}`; }
+  },
+  aqi: {
+    title: "Air quality",
+    aka: "AQI: the Air Quality Index used by the US EPA, from 0 to 500",
+    what: "One number for how clean the air is to breathe. It looks at the worst of several pollutants: tiny smoke and dust particles (PM2.5), ozone (smog that builds on hot sunny afternoons) and others. Under 50 is clean air. Wildfire smoke and traffic on hot, still days push it up. This reading comes from an air-quality forecast model, so it's close but not a measurement from a sensor on your street.",
+    extra: () => scaleList(AQI_LEVELS.map(([max, name], i) => [`${i ? AQI_LEVELS[i - 1][0] + 1 : 0}${max === Infinity ? "+" : "–" + max}`, name]), lastData?.aqi ? AQI_LEVELS.indexOf(aqiLevel(lastData.aqi.value)) : -1),
+    now: (c, d) => d.aqi ? `${d.aqi.value}: ${aqiLevel(d.aqi.value)[1]}. ${aqiLevel(d.aqi.value)[3]}${d.aqi.peak > d.aqi.value + 10 ? ` It may reach ${d.aqi.peak} in the next 24 hours.` : ""}` : null
   },
   amount: {
     title: "Rain amount",
@@ -767,7 +835,7 @@ function explain(key) {
   $("explainBody").scrollTop = 0;
 }
 function explainAll() {
-  const order = ["temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "visibility", "pop", "amount", "radar", "sunrise", "moon", "station", "forecast", "hourly", "alerts"];
+  const order = ["temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "aqi", "visibility", "pop", "amount", "radar", "sunrise", "moon", "station", "forecast", "hourly", "alerts"];
   $("explainBody").innerHTML = `<div><h3 id="explainTitle">What the words mean</h3></div>
     <p>Tap any underlined word in the app to see what it means and what today's number tells you.</p>
     <div class="all">${order.map((k) => termBtn(k, TERMS[k].title)).join("")}</div>
@@ -925,7 +993,7 @@ function render() {
   if (!d) return;
   $("unitBtn").textContent = units === "F" ? "°F" : "°C";
   $("place").textContent = current.label || d.place || `${current.lat.toFixed(3)}, ${current.lon.toFixed(3)}`;
-  $("placeSub").textContent = `${current.lat.toFixed(4)}°, ${current.lon.toFixed(4)}° · updated ${fmtTime(d.fetchedAt)}`;
+  $("placeSub").textContent = `${current.label ? "Searched place" : "Your location"} · updated ${fmtTime(d.fetchedAt)}`;
   const c = d.current;
 
   const stats = [
@@ -933,7 +1001,8 @@ function render() {
     ["gusts", "Gusts", wind(c.gustKmh)],
     ["humidity", "Humidity", c.humidity != null ? Math.round(c.humidity) + "%" : "–"],
     ["dew", "Dew point", t(c.dewC)],
-    ["pressure", "Pressure", pres(c.pressureHpa)],
+    ["pressure", "Pressure", pres(c.pressureHpa), [pressureLevel(c.pressureHpa), pressureTrend(c.pressureHpa, c.pressure3hAgo)?.word].filter(Boolean).join(", ")],
+    ...(d.aqi ? [["aqi", "Air quality", `${d.aqi.value} AQI`, aqiLevel(d.aqi.value)[1], aqiLevel(d.aqi.value)[2]]] : []),
     ["visibility", "Visibility", vis(c.visKm)]
   ].filter(([, , v]) => v !== "–");
 
@@ -950,7 +1019,7 @@ function render() {
       ${c.feelsC != null && Math.abs(c.feelsC - c.tempC) >= 1 ? `<div class="feels">${termBtn("feels", "Feels like")} ${t(c.feelsC)}</div>` : ""}
       ${(() => { const hl = [d.days[0]?.hiC != null && "High " + t(d.days[0].hiC), d.days[0]?.loC != null && "Low " + t(d.days[0].loC)].filter(Boolean).join(" · "); return hl ? `<div class="feels">${termBtn("hilo", hl)}</div>` : ""; })()}
     </div>
-    ${stats.length ? `<div class="stats">${stats.map(([key, k, v]) => `<div class="stat"><div class="k">${termBtn(key, k)}</div><div class="v">${esc(v)}</div></div>`).join("")}</div>` : ""}
+    ${stats.length ? `<div class="stats">${stats.map(([key, k, v, sub, dot]) => `<div class="stat"><div class="k">${termBtn(key, k)}</div><div class="v">${dot ? `<span class="aqi-dot" style="background:${dot}"></span>` : ""}${esc(v)}</div>${sub ? `<div class="s">${esc(sub[0].toUpperCase() + sub.slice(1))}</div>` : ""}</div>`).join("")}</div>` : ""}
     ${(() => {
       const sun = sunTimes(current.lat, current.lon), mp = moonPhase();
       const len = sun.rise && sun.set ? (sun.set - sun.rise) / 36e5 : null;
@@ -1021,9 +1090,29 @@ async function onSearch(e) {
     out.innerHTML = r.results.map((p, i) => `<li><button type="button" data-i="${i}">${esc([p.name, p.admin1, p.country_code].filter(Boolean).join(", "))}</button></li>`).join("");
     out.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
       const p = r.results[b.dataset.i];
-      setLocation({ lat: p.latitude, lon: p.longitude, label: [p.name, p.admin1].filter(Boolean).join(", ") });
+      if ($("explain").open) $("explain").close();
+      setLocation({ lat: p.latitude, lon: p.longitude, label: [p.name, p.admin1].filter(Boolean).join(", "), at: Date.now() });
     }));
   } catch (err) { out.innerHTML = `<li class="err">Search failed (${esc(err.message)}). Check your connection.</li>`; }
+}
+
+// ---------- location sheet ----------
+function openLocation() {
+  const c = current;
+  const acc = c?.accuracyM ? (units === "F" ? `±${Math.max(10, Math.round(c.accuracyM * 3.281 / 10) * 10)} ft` : `±${Math.round(c.accuracyM)} m`) : null;
+  const when = c?.at ? fmtTime(new Date(c.at)) : null;
+  $("explainBody").innerHTML = `
+    <div><h3 id="explainTitle">Location</h3>
+      <div class="aka">${c ? (c.label ? `Showing ${esc(c.label)} (a place you searched for)` : `Using your GPS location${when ? ` from ${when}` : ""}${acc ? `, accurate to ${acc}` : ""}`) : "No location yet"}</div></div>
+    <button type="button" id="locNow">Update to where I am now</button>
+    <p class="sub-h">Or look up another place</p>
+    <form class="search" id="searchForm" style="justify-content:flex-start;margin:0"><input id="q" type="search" placeholder="City or ZIP code" aria-label="City or ZIP code" autocomplete="off"><button type="submit">Search</button></form>
+    <ul class="results" id="results" style="margin:0"></ul>
+    <button type="button" class="close" id="explainClose">Done</button>`;
+  $("explainClose").onclick = () => $("explain").close();
+  $("locNow").onclick = () => { $("explain").close(); locate(); };
+  $("searchForm").addEventListener("submit", onSearch);
+  if (!$("explain").open) $("explain").showModal();
 }
 
 // ---------- main flow ----------
@@ -1031,6 +1120,7 @@ async function load() {
   if (!current) return;
   const { lat, lon } = current;
   $("refreshBtn").disabled = true;
+  const aqiP = loadAQI(lat, lon).catch(() => null);
   let data;
   try {
     data = await loadNWS(lat, lon);
@@ -1048,6 +1138,7 @@ async function load() {
     }
   }
   data.fetchedAt = new Date();
+  data.aqi = await aqiP;
   lastData = data;
   store.set(LS.cache, { loc: current, data });
   $("refreshBtn").disabled = false;
@@ -1077,6 +1168,8 @@ function setLocation(loc) {
 const nativeGeo = window.Capacitor?.isNativePlatform?.() ? window.Capacitor.Plugins?.Geolocation : null;
 
 function onLocateError(err) {
+  // Already showing weather: keep it, and just say the update didn't work.
+  if (lastData) { $("placeSub").textContent = "Couldn't get a new location. Showing the last one."; return; }
   const saved = store.get(LS.last);
   if (saved && !lastData) { setLocation(saved); return; }
   const denied = err?.code === 1 || /denied|permission/i.test(err?.message || "");
@@ -1087,8 +1180,9 @@ function onLocateError(err) {
 
 async function locate() {
   $("place").textContent = "Finding your location…";
-  const opts = { enableHighAccuracy: true, timeout: 15000, maximumAge: 5 * 60 * 1000 };
-  const ok = (pos) => setLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, accuracyM: pos.coords.accuracy });
+  // Always ask for a fresh GPS fix, so "Update" really means where you are now.
+  const opts = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
+  const ok = (pos) => setLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, accuracyM: pos.coords.accuracy, at: Date.now() });
   if (nativeGeo) {
     try {
       let perm = await nativeGeo.checkPermissions();
@@ -1118,10 +1212,13 @@ function reviveCache() {
 $("lookBtn").addEventListener("click", openLook);
 applyLook();
 $("unitBtn").addEventListener("click", () => { units = units === "F" ? "C" : "F"; store.set(LS.units, units); shareWithWidget(); render(); });
-$("locBtn").addEventListener("click", locate);
+$("locBtn").addEventListener("click", openLocation);
 $("refreshBtn").addEventListener("click", () => (current ? load() : locate()));
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && lastData && Date.now() - lastData.fetchedAt > REFRESH_MS) load();
+  if (document.visibilityState !== "visible") return;
+  // Coming back to the app: if you were using GPS and it's been 15+ minutes, check where you are now.
+  if (current && !current.label && Date.now() - (current.at || 0) > 15 * 6e4) locate();
+  else if (lastData && Date.now() - lastData.fetchedAt > REFRESH_MS) load();
 });
 
 reviveCache();
