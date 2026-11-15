@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Local Weather</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+:root { --bg: #eef3f6; --fg: #12232f; --muted: #5b6f7c; --accent: #1d6fa5; --line: #d5e0e7; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0b1821; --fg: #e6eef3; --muted: #93a8b6; --accent: #6db7ea; --line: #23394a; color-scheme: dark; } }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 "Inter", system-ui, sans-serif; display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); box-sizing: border-box; text-align: center; }
+h1 { font: 600 1.6rem/1.2 "Barlow Semi Condensed", system-ui, sans-serif; margin: 0 0 8px; }
+p { color: var(--muted); margin: 0 0 20px; max-width: 30ch; }
+button { font: 600 1rem "Inter", system-ui, sans-serif; color: var(--fg); background: transparent; border: 1px solid var(--accent); border-radius: 10px; padding: 10px 22px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>No connection</h1>
+  <p>Local Weather needs the internet to get the latest forecast. It will try again when you tap below.</p>
+  <button type="button" id="retry">Try again</button>
+</main>
+<script>
+document.getElementById("retry").addEventListener("click", () => { location.href = "https://scotterotty.github.io/local-weather/"; });
+window.addEventListener("online", () => { location.href = "https://scotterotty.github.io/local-weather/"; });
+</script>
+</body>
+</html>

@@ -25,6 +25,8 @@ jobs:
       - uses: actions/checkout@v4
       # One-time setup: repo Settings > Pages > Source: GitHub Actions
       - uses: actions/configure-pages@v5
+      - name: Stamp the version shown at the bottom of the app
+        run: sed -i "s/__BUILD__/${GITHUB_SHA::7} · $(TZ=America/Los_Angeles date '+%b %-d, %-I:%M %p')/" www/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: www

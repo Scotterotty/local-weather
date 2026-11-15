@@ -234,6 +234,8 @@ footer a { color: var(--accent); }
 <script>
 "use strict";
 // ---------- settings ----------
+// Replaced by the GitHub Pages deploy with the commit and date, so you can see when an update has arrived.
+const BUILD = "__BUILD__";
 const REFRESH_MS = 10 * 60 * 1000;        // auto refresh every 10 minutes
 const OBS_MAX_AGE_MIN = 90;               // ignore station reports older than this
 const LS = { units: "lw.units", last: "lw.lastLoc", cache: "lw.cache" };
@@ -967,7 +969,7 @@ function render() {
   </section>`;
 
   mountRadar();
-  $("footer").innerHTML = `${termBtn("all", "What do all these words mean?")}<br><br>Source: <a href="${d.sourceLink}" target="_blank" rel="noopener">${esc(d.source)}</a> · ${esc(d.sourceNote)}${d.fallbackReason ? ` · ${esc(d.fallbackReason)}` : ""}`;
+  $("footer").innerHTML = `${termBtn("all", "What do all these words mean?")}<br><br>${BUILD.startsWith("__") ? "Built-in copy" : `App version ${BUILD}`}<br>Source: <a href="${d.sourceLink}" target="_blank" rel="noopener">${esc(d.source)}</a> · ${esc(d.sourceNote)}${d.fallbackReason ? ` · ${esc(d.fallbackReason)}` : ""}`;
 }
 
 function renderError(msg, offerSearch = true) {

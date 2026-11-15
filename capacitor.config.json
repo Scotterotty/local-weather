@@ -2,6 +2,14 @@
   "appId": "com.scotterotty.localweather",
   "appName": "Local Weather",
   "webDir": "www",
-  "android": { "allowMixedContent": false },
-  "ios": { "contentInset": "never" }
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "never"
+  },
+  "server": {
+    "url": "https://scotterotty.github.io/local-weather/",
+    "errorPath": "offline.html"
+  }
 }

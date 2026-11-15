@@ -8,6 +8,10 @@ The app is one web page (`www/index.html`) wrapped as a native iOS and Android a
 
 https://scotterotty.github.io/local-weather/
 
+## How updates reach the phone
+
+The Android app loads the app's screens from the web version (GitHub Pages), so any change to `www/` shows up on the phone a minute or two after it's pushed. No reinstall. The version and time at the bottom of the app show which update you're on. Only native changes (the home-screen widget, permissions, app icon) need a new APK. Without internet the app shows a "No connection" screen with a retry button.
+
 ## Install on Android
 
 Every push to `main` builds an APK. On your phone, open this repo's **Releases** page, open **Latest Android build**, and tap `local-weather.apk`. Android will ask you to allow installs from your browser the first time.
