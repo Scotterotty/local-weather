@@ -16,6 +16,7 @@
   --line: #d5e0e7;
   --accent: #1d6fa5;
   --warm: #d9772b;
+  --moonlit: #f4e7b8;
   --rain: #3f8fd2;
   --alert-bg: #fff1e6;
   --alert-fg: #8a3a00;
@@ -67,6 +68,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .stats { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px 16px; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 6px; }
 .stat .k { font-size: .75rem; color: var(--muted); }
 .stat .v { font: 500 1.05rem var(--display); font-variant-numeric: tabular-nums; }
+.sky { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
+.sky .k { font-size: .75rem; color: var(--muted); }
+.sky .v { font: 500 1.05rem var(--display); font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 6px; }
+.sky .s { font-size: .75rem; color: var(--muted); }
 .obs { grid-column: 1 / -1; font-size: .78rem; color: var(--muted); }
 
 .alerts { display: grid; gap: 10px; }
@@ -350,6 +355,47 @@ async function reverseName(lat, lon) {
   } catch { return null; }
 }
 
+// ---------- sun and moon (calculated on the device, no internet needed) ----------
+const RAD = Math.PI / 180;
+// NOAA-style sunrise equation; accurate to about a minute. Returns Date instants (or null for polar day/night).
+function sunTimes(lat, lon, date = new Date()) {
+  const n = Math.round(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 12) / 864e5 + 2440587.5 - 2451545);
+  const Js = n - lon / 360;
+  const M = (357.5291 + 0.98560028 * Js) % 360;
+  const C = 1.9148 * Math.sin(M * RAD) + 0.02 * Math.sin(2 * M * RAD) + 0.0003 * Math.sin(3 * M * RAD);
+  const L = (M + C + 180 + 102.9372) % 360;
+  const Jt = 2451545 + Js + 0.0053 * Math.sin(M * RAD) - 0.0069 * Math.sin(2 * L * RAD);
+  const dec = Math.asin(Math.sin(L * RAD) * Math.sin(23.4397 * RAD));
+  const cosW = (Math.sin(-0.833 * RAD) - Math.sin(lat * RAD) * Math.sin(dec)) / (Math.cos(lat * RAD) * Math.cos(dec));
+  const toDate = (j) => new Date((j - 2440587.5) * 864e5);
+  if (cosW > 1 || cosW < -1) return { rise: null, set: null, noon: toDate(Jt) };
+  const w = Math.acos(cosW) / RAD;
+  return { rise: toDate(Jt - w / 360), set: toDate(Jt + w / 360), noon: toDate(Jt) };
+}
+const SYNODIC = 29.530588853;
+function moonPhase(date = new Date()) {
+  const jd = date.getTime() / 864e5 + 2440587.5;
+  const age = (((jd - 2451550.1) % SYNODIC) + SYNODIC) % SYNODIC;
+  const illum = (1 - Math.cos(2 * Math.PI * age / SYNODIC)) / 2;
+  // Quarter/full/new are moments; give each about a day either side, the rest are crescent or gibbous.
+  const q = SYNODIC / 4, near = (x) => Math.abs(age - x) < 1;
+  const name = age < 1 || age > SYNODIC - 1 ? "New moon" : near(q) ? "First quarter" : near(2 * q) ? "Full moon" : near(3 * q) ? "Last quarter"
+    : age < q ? "Waxing crescent" : age < 2 * q ? "Waxing gibbous" : age < 3 * q ? "Waning gibbous" : "Waning crescent";
+  const daysToFull = ((SYNODIC / 2 - age) % SYNODIC + SYNODIC) % SYNODIC;
+  const daysToNew = SYNODIC - age;
+  return { age, illum, name, waxing: age < SYNODIC / 2, daysToFull, daysToNew };
+}
+function moonIcon(m, size = 28) {
+  // Lit part drawn as two arcs: outer edge (half circle) + terminator (ellipse whose width follows illumination).
+  const r = size / 2 - 1, cx = size / 2, cy = size / 2;
+  const k = Math.abs(1 - 2 * m.illum) * r;          // terminator half-width
+  const right = m.waxing;                           // northern hemisphere: waxing lit on the right
+  const sweepOuter = right ? 1 : 0;
+  const sweepTerm = (m.illum > 0.5) === right ? 1 : 0;
+  const d = `M${cx} ${cy - r} A${r} ${r} 0 0 ${sweepOuter} ${cx} ${cy + r} A${k} ${r} 0 0 ${sweepTerm} ${cx} ${cy - r}Z`;
+  return `<svg class="moon" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${cx}" cy="${cy}" r="${r}" fill="var(--line)"/><path d="${d}" fill="var(--moonlit)"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--muted)" stroke-opacity=".35"/></svg>`;
+}
+
 // ---------- icons ----------
 function iconFor(desc = "", isDay = true) {
   const s = desc.toLowerCase();
@@ -455,6 +501,17 @@ const TERMS = {
     extra: () => scaleList([["0–20%", "Unlikely. No need for an umbrella"], ["30–50%", "It might, it might not"], ["60–70%", "Likely. Bring a jacket"], ["80–100%", "Expect it"]], -1),
     now: (c, d) => { const p = Math.max(0, ...d.hourly.slice(0, 12).map((h) => h.pop || 0)); return `The highest chance in the next 12 hours is ${p}%.`; }
   },
+  sunrise: {
+    title: "Sunrise and sunset",
+    what: "When the top edge of the sun appears over or disappears below a flat horizon. Hills and buildings can hide it a few minutes longer. The air bends sunlight, so you actually see the sun about 2 minutes before it's really above the horizon. In winter the days are short because Earth's tilt points our half of the planet away from the sun.",
+    now: () => { const s = sunTimes(current.lat, current.lon), t2 = sunTimes(current.lat, current.lon, new Date(Date.now() + 864e5)); if (!s.rise || !t2.rise) return null; const diff = Math.round(((t2.set - t2.rise) - (s.set - s.rise)) / 6e4); return `Tomorrow will have ${Math.abs(diff)} minute${Math.abs(diff) === 1 ? "" : "s"} ${diff >= 0 ? "more" : "less"} daylight than today.`; }
+  },
+  moon: {
+    title: "Moon phase",
+    what: "The moon doesn't make its own light. We see the half lit by the sun, and as the moon circles Earth every 29½ days we see more or less of that lit half. Waxing means the lit part is growing toward a full moon; waning means it's shrinking toward a new moon, when the moon is between us and the sun and we can't see it. The percentage is how much of the face is lit.",
+    extra: () => { const m = moonPhase(); return scaleList([["New moon", "Dark, rises with the sun"], ["First quarter", "Right half lit, high at sunset"], ["Full moon", "All lit, rises at sunset"], ["Last quarter", "Left half lit, up at dawn"]], ["New moon", "First quarter", "Full moon", "Last quarter"].indexOf(m.name)); },
+    now: () => { const m = moonPhase(); return `${m.name}, ${Math.round(m.illum * 100)}% lit. ${m.waxing ? `Full moon in about ${Math.round(m.daysToFull)} day${Math.round(m.daysToFull) === 1 ? "" : "s"}.` : `New moon in about ${Math.round(m.daysToNew)} day${Math.round(m.daysToNew) === 1 ? "" : "s"}.`}`; }
+  },
   station: {
     title: "Weather station",
     what: "A set of instruments (thermometer, wind vane, rain gauge, barometer) that reports what's actually happening outside. Many sit at airports, fire stations and schools. This app uses the nearest one that has reported in the last 90 minutes, so \"right now\" is a real measurement, not a prediction.",
@@ -491,7 +548,7 @@ function explain(key) {
   $("explainBody").scrollTop = 0;
 }
 function explainAll() {
-  const order = ["temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "visibility", "pop", "station", "forecast", "hourly", "alerts"];
+  const order = ["temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "visibility", "pop", "sunrise", "moon", "station", "forecast", "hourly", "alerts"];
   $("explainBody").innerHTML = `<div><h3 id="explainTitle">What the words mean</h3></div>
     <p>Tap any underlined word in the app to see what it means and what today's number tells you.</p>
     <div class="all">${order.map((k) => termBtn(k, TERMS[k].title)).join("")}</div>
@@ -662,6 +719,15 @@ function render() {
       ${(() => { const hl = [d.days[0]?.hiC != null && "High " + t(d.days[0].hiC), d.days[0]?.loC != null && "Low " + t(d.days[0].loC)].filter(Boolean).join(" · "); return hl ? `<div class="feels">${termBtn("hilo", hl)}</div>` : ""; })()}
     </div>
     ${stats.length ? `<div class="stats">${stats.map(([key, k, v]) => `<div class="stat"><div class="k">${termBtn(key, k)}</div><div class="v">${esc(v)}</div></div>`).join("")}</div>` : ""}
+    ${(() => {
+      const sun = sunTimes(current.lat, current.lon), mp = moonPhase();
+      const len = sun.rise && sun.set ? (sun.set - sun.rise) / 36e5 : null;
+      return `<div class="sky">
+        <div><div class="k">${termBtn("sunrise", "Sunrise")}</div><div class="v">${sun.rise ? fmtTime(sun.rise) : "–"}</div></div>
+        <div><div class="k">${termBtn("sunrise", "Sunset")}</div><div class="v">${sun.set ? fmtTime(sun.set) : "–"}</div>${len ? `<div class="s">${Math.floor(len)} h ${Math.round((len % 1) * 60)} m of daylight</div>` : ""}</div>
+        <div><div class="k">${termBtn("moon", "Moon")}</div><div class="v">${moonIcon(mp, 22)}${Math.round(mp.illum * 100)}%</div><div class="s">${mp.name}</div></div>
+      </div>`;
+    })()}
     <div class="obs">${c.station ? `${termBtn("station", "Measured")} at ${esc(c.station)} at ${fmtTime(c.observedAt)}` : `Current values from the forecast (${termBtn("station", "no recent station report")} nearby)`}</div>
   </section>
 

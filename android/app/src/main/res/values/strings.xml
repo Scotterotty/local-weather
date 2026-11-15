@@ -4,5 +4,5 @@
     <string name="title_activity_main">Local Weather</string>
     <string name="package_name">com.scotterotty.localweather</string>
     <string name="custom_url_scheme">com.scotterotty.localweather</string>
-    <string name="widget_description">Current temperature and today\'s high and low where you are</string>
+    <string name="widget_description">Current weather, the next 5 hours, sunrise, sunset and moon phase where you are</string>
 </resources>

@@ -49,6 +49,10 @@ public class WidgetUpdateWorker extends Worker {
     private static final String APP_PREFS = "CapacitorStorage";
     private static final String UA = "LocalWeatherAndroidWidget/1.0 (github.com/Scotterotty/local-weather)";
     private static final long OBS_MAX_AGE_MS = 90 * 60 * 1000L;
+    static final int HOURS = 5;
+    private static final int[][] HOUR_IDS = {
+        {R.id.h0_t, R.id.h0_c, R.id.h0_p}, {R.id.h1_t, R.id.h1_c, R.id.h1_p}, {R.id.h2_t, R.id.h2_c, R.id.h2_p},
+        {R.id.h3_t, R.id.h3_c, R.id.h3_p}, {R.id.h4_t, R.id.h4_c, R.id.h4_p}};
 
     public WidgetUpdateWorker(@NonNull Context context, @NonNull WorkerParameters params) {
         super(context, params);
@@ -98,6 +102,8 @@ public class WidgetUpdateWorker extends Worker {
                 s = fetchOpenMeteo(loc[0], loc[1]);
             }
             if (s.place == null) s.place = savedLabel(ctx);
+            s.lat = loc[0];
+            s.lon = loc[1];
             s.time = System.currentTimeMillis();
             s.save(ctx);
             render(ctx, s, null);
@@ -193,9 +199,18 @@ public class WidgetUpdateWorker extends Worker {
             s.place = rp.optString("city") + ", " + rp.optString("state");
         }
 
-        JSONObject h0 = get(p.getString("forecastHourly")).getJSONObject("properties").getJSONArray("periods").getJSONObject(0);
+        JSONArray hp = get(p.getString("forecastHourly")).getJSONObject("properties").getJSONArray("periods");
+        JSONObject h0 = hp.getJSONObject(0);
         s.tempC = toC(h0);
         s.desc = h0.optString("shortForecast");
+        SimpleDateFormat isoH = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US);
+        for (int i = 1; i < hp.length() && s.hours.length() < HOURS; i++) {
+            JSONObject h = hp.getJSONObject(i);
+            Date start = isoH.parse(h.getString("startTime"));
+            if (start == null || start.getTime() < System.currentTimeMillis() - 30 * 60 * 1000L) continue;
+            Double pop = num(h, "probabilityOfPrecipitation");
+            s.hours.put(new JSONObject().put("t", start.getTime()).put("c", toC(h)).put("p", pop == null ? -1 : pop));
+        }
 
         JSONArray fc = get(p.getString("forecast")).getJSONObject("properties").getJSONArray("periods");
         JSONObject f0 = fc.getJSONObject(0);
@@ -247,7 +262,8 @@ public class WidgetUpdateWorker extends Worker {
     private static Snapshot fetchOpenMeteo(double lat, double lon) throws Exception {
         String url = String.format(Locale.US,
             "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&timezone=auto&forecast_days=1"
-                + "&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min", lat, lon);
+                + "&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min"
+                + "&hourly=temperature_2m,precipitation_probability&forecast_hours=12", lat, lon);
         JSONObject d = get(url);
         Snapshot s = new Snapshot();
         s.source = "Open-Meteo";
@@ -257,6 +273,19 @@ public class WidgetUpdateWorker extends Worker {
         JSONObject daily = d.getJSONObject("daily");
         s.hiC = daily.getJSONArray("temperature_2m_max").getDouble(0);
         s.loC = daily.getJSONArray("temperature_2m_min").getDouble(0);
+        JSONObject hourly = d.getJSONObject("hourly");
+        JSONArray times = hourly.getJSONArray("time"), temps = hourly.getJSONArray("temperature_2m");
+        JSONArray pops = hourly.optJSONArray("precipitation_probability");
+        long offset = d.optLong("utc_offset_seconds") * 1000L;
+        SimpleDateFormat local = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm", Locale.US);
+        local.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        for (int i = 0; i < times.length() && s.hours.length() < HOURS; i++) {
+            Date wall = local.parse(times.getString(i));
+            if (wall == null) continue;
+            long t = wall.getTime() - offset;
+            if (t <= System.currentTimeMillis()) continue;
+            s.hours.put(new JSONObject().put("t", t).put("c", temps.getDouble(i)).put("p", pops == null || pops.isNull(i) ? -1 : pops.getDouble(i)));
+        }
         return s;
     }
 
@@ -284,6 +313,8 @@ public class WidgetUpdateWorker extends Worker {
             v.setTextViewText(R.id.w_desc, message != null ? message : "");
             v.setTextViewText(R.id.w_hilo, "");
             v.setTextViewText(R.id.w_updated, "");
+            v.setViewVisibility(R.id.w_hours, android.view.View.GONE);
+            v.setTextViewText(R.id.w_sky, "");
         } else {
             v.setTextViewText(R.id.w_place, s.place != null ? s.place : "Current location");
             v.setTextViewText(R.id.w_temp, fmt(s.tempC, useC));
@@ -294,6 +325,34 @@ public class WidgetUpdateWorker extends Worker {
             v.setTextViewText(R.id.w_hilo, hl.toString());
             String when = DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date(s.time));
             v.setTextViewText(R.id.w_updated, (s.station != null ? s.station + " · " : "") + when);
+
+            // Next few hours
+            SimpleDateFormat hourFmt = new SimpleDateFormat("h a", Locale.getDefault());
+            int shown = 0;
+            for (int i = 0; i < HOURS; i++) {
+                JSONObject h = s.hours.optJSONObject(i);
+                if (h == null) {
+                    v.setTextViewText(HOUR_IDS[i][0], ""); v.setTextViewText(HOUR_IDS[i][1], ""); v.setTextViewText(HOUR_IDS[i][2], "");
+                    continue;
+                }
+                shown++;
+                v.setTextViewText(HOUR_IDS[i][0], hourFmt.format(new Date(h.optLong("t"))));
+                v.setTextViewText(HOUR_IDS[i][1], fmt(h.optDouble("c"), useC));
+                double pop = h.optDouble("p", -1);
+                v.setTextViewText(HOUR_IDS[i][2], pop >= 10 ? Math.round(pop) + "%" : "");
+            }
+            v.setViewVisibility(R.id.w_hours, shown > 0 ? android.view.View.VISIBLE : android.view.View.GONE);
+
+            // Sun and moon, calculated on the phone
+            long now = System.currentTimeMillis();
+            StringBuilder sky = new StringBuilder();
+            if (s.lat != 0 || s.lon != 0) {
+                long[] sun = Astro.sun(s.lat, s.lon, now);
+                DateFormat tf = DateFormat.getTimeInstance(DateFormat.SHORT);
+                if (sun[0] != 0) sky.append("↑ ").append(tf.format(new Date(sun[0]))).append("   ↓ ").append(tf.format(new Date(sun[1]))).append("   ");
+            }
+            sky.append(Astro.moonLabel(now)).append(" ").append(Astro.moonLitPercent(now)).append("%");
+            v.setTextViewText(R.id.w_sky, sky.toString());
         }
 
         Intent open = new Intent(ctx, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -307,6 +366,8 @@ public class WidgetUpdateWorker extends Worker {
         String place, desc, station, source;
         Double tempC, hiC, loC;
         long time;
+        double lat, lon;
+        JSONArray hours = new JSONArray();
 
         void save(Context ctx) {
             try {
@@ -316,6 +377,7 @@ public class WidgetUpdateWorker extends Worker {
                 if (hiC != null) o.put("hiC", hiC);
                 if (loC != null) o.put("loC", loC);
                 o.put("time", time);
+                o.put("lat", lat); o.put("lon", lon); o.put("hours", hours);
                 ctx.getSharedPreferences(CACHE, Context.MODE_PRIVATE).edit().putString("snapshot", o.toString()).apply();
             } catch (Exception ignored) { }
         }
@@ -334,6 +396,9 @@ public class WidgetUpdateWorker extends Worker {
                 s.hiC = o.has("hiC") ? o.getDouble("hiC") : null;
                 s.loC = o.has("loC") ? o.getDouble("loC") : null;
                 s.time = o.optLong("time");
+                s.lat = o.optDouble("lat", 0); s.lon = o.optDouble("lon", 0);
+                JSONArray hs = o.optJSONArray("hours");
+                if (hs != null) s.hours = hs;
                 return s;
             } catch (Exception e) { return null; }
         }
