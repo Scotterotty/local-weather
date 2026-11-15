@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write
 
+# Only the newest push publishes, so an older build can't overwrite a newer APK.
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
