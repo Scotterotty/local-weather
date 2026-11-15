@@ -307,6 +307,12 @@ function amount(mm, snow = false) {
   return snow ? (mm < 10 ? (mm / 10).toFixed(1) + " cm" : Math.round(mm / 10) + " cm") : (mm < 10 ? mm.toFixed(1) : Math.round(mm)) + " mm";
 }
 
+function distKm(a1, o1, a2, o2) {
+  const dA = (a2 - a1) * RAD, dO = (o2 - o1) * RAD;
+  const h = Math.sin(dA / 2) ** 2 + Math.cos(a1 * RAD) * Math.cos(a2 * RAD) * Math.sin(dO / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h));
+}
+
 // National Weather Service (US only). Forecaster-reviewed grid forecast + real station observations.
 async function loadNWS(lat, lon) {
   const pt = await getJSON(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`);
@@ -332,15 +338,23 @@ async function loadNWS(lat, lon) {
     snowMm: snowByHour ? snowByHour.get(hourKey(new Date(h.startTime))) ?? 0 : null
   }));
 
-  // Nearest station that has a fresh report
+  // Station choice: official airport stations (ASOS/AWOS, IDs like KSNA) are calibrated and maintained by
+  // NWS/FAA, so prefer the nearest one within 40 km. Volunteer and fire-weather stations can be off by
+  // several degrees (sun on the sensor, poor siting), so they're only a fallback.
   let obs = null;
-  const list = stations?.features?.slice(0, 4) || [];
-  for (const st of list) {
-    try {
-      const o = (await getJSON(`https://api.weather.gov/stations/${st.properties.stationIdentifier}/observations/latest`)).properties;
-      const age = (Date.now() - new Date(o.timestamp)) / 60000;
-      if (o.temperature?.value != null && age <= OBS_MAX_AGE_MIN) { obs = { o, st: st.properties }; break; }
-    } catch {}
+  const feats = (stations?.features || []).map((f) => {
+    const [slon, slat] = f.geometry?.coordinates || [];
+    return { p: f.properties, km: slat == null ? 999 : distKm(lat, lon, slat, slon) };
+  });
+  const official = feats.filter((f) => /^[KP][A-Z0-9]{3}$/.test(f.p.stationIdentifier) && f.km <= 40).slice(0, 3);
+  const others = feats.slice(0, 4).filter((f) => !official.includes(f));
+  const latest = (f) => getJSON(`https://api.weather.gov/stations/${f.p.stationIdentifier}/observations/latest`)
+    .then((r) => ({ o: r.properties, st: f.p, km: f.km })).catch(() => null);
+  const fresh = (x) => x && x.o.temperature?.value != null && (Date.now() - new Date(x.o.timestamp)) / 60000 <= OBS_MAX_AGE_MIN;
+  for (const group of [official, others]) {
+    const results = await Promise.all(group.map(latest));      // in parallel, nearest first
+    obs = results.find(fresh) || null;
+    if (obs) break;
   }
 
   const h0 = hr.properties.periods[0];
@@ -355,7 +369,8 @@ async function loadNWS(lat, lon) {
       windKmh: o.windSpeed?.value, windDir: compass(o.windDirection?.value), gustKmh: o.windGust?.value,
       pressureHpa: o.barometricPressure?.value != null ? o.barometricPressure.value / 100 : null,
       visKm: o.visibility?.value != null ? o.visibility.value / 1000 : null,
-      observedAt: new Date(o.timestamp), station: `${obs.st.name} (${obs.st.stationIdentifier})`,
+      observedAt: new Date(o.timestamp), station: `${obs.st.name} (${obs.st.stationIdentifier})`, stationKm: obs.km,
+      official: /^[KP][A-Z0-9]{3}$/.test(obs.st.stationIdentifier),
       isDay: h0.isDaytime
     };
   } else {
@@ -718,7 +733,7 @@ const TERMS = {
   },
   station: {
     title: "Weather station",
-    what: "A set of instruments (thermometer, wind vane, rain gauge, barometer) that reports what's actually happening outside. Many sit at airports, fire stations and schools. This app uses the nearest one that has reported in the last 90 minutes, so \"right now\" is a real measurement, not a prediction.",
+    what: "A set of instruments (thermometer, wind vane, rain gauge, barometer) that reports what's actually happening outside. Many sit at airports, fire stations and schools. This app uses the nearest official airport station (run by the Weather Service and the FAA, checked regularly) that has reported in the last 90 minutes, so \"right now\" is a real measurement, not a prediction. Volunteer stations are only used when no airport station is nearby, because a sensor in the sun can read several degrees too warm.",
     now: (c) => c.station ? `${c.station}, reported at ${fmtTime(c.observedAt)}.` : "No nearby station has reported recently, so these numbers come from the forecast."
   },
   forecast: {
@@ -945,7 +960,7 @@ function render() {
         <div><div class="k">${termBtn("moon", "Moon")}</div><div class="v">${moonIcon(mp, 22)}${Math.round(mp.illum * 100)}%</div><div class="s">${mp.name}</div></div>
       </div>`;
     })()}
-    <div class="obs">${c.station ? `${termBtn("station", "Measured")} at ${esc(c.station)} at ${fmtTime(c.observedAt)}` : `Current values from the forecast (${termBtn("station", "no recent station report")} nearby)`}</div>
+    <div class="obs">${c.station ? `${termBtn("station", "Measured")} at ${esc(c.station)}${c.stationKm != null ? `, ${units === "F" ? Math.round(c.stationKm / 1.609) + " mi" : Math.round(c.stationKm) + " km"} away` : ""}, at ${fmtTime(c.observedAt)}${c.official === false ? " (volunteer station, no airport station reporting nearby)" : ""}` : `Current values from the forecast (${termBtn("station", "no recent station report")} nearby)`}</div>
   </section>
 
   <div id="radarSlot"></div>

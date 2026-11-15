@@ -221,27 +221,47 @@ public class WidgetUpdateWorker extends Worker {
             s.loC = toC(f0);
         }
 
-        // Real measurement from the nearest station with a fresh report
+        // Real measurement. Same rule as the app: nearest official airport station (ASOS/AWOS, e.g. KSNA)
+        // within 40 km first, volunteer/fire-weather stations only as a fallback.
         try {
             JSONArray st = get(p.getString("observationStations")).getJSONArray("features");
+            java.util.List<String> official = new java.util.ArrayList<>(), others = new java.util.ArrayList<>();
+            for (int i = 0; i < st.length(); i++) {
+                JSONObject f = st.getJSONObject(i);
+                String id = f.getJSONObject("properties").getString("stationIdentifier");
+                double km = 999;
+                JSONObject g = f.optJSONObject("geometry");
+                JSONArray c = g == null ? null : g.optJSONArray("coordinates");
+                if (c != null && c.length() >= 2) km = distKm(lat, lon, c.getDouble(1), c.getDouble(0));
+                if (id.matches("[KP][A-Z0-9]{3}") && km <= 40) { if (official.size() < 3) official.add(id); }
+                else if (i < 4) others.add(id);
+            }
             SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US);
-            for (int i = 0; i < Math.min(3, st.length()); i++) {
-                String id = st.getJSONObject(i).getJSONObject("properties").getString("stationIdentifier");
-                try {
-                    JSONObject o = get("https://api.weather.gov/stations/" + id + "/observations/latest").getJSONObject("properties");
-                    Double t = num(o, "temperature");
-                    Date when = iso.parse(o.getString("timestamp"));
-                    if (t != null && when != null && System.currentTimeMillis() - when.getTime() <= OBS_MAX_AGE_MS) {
-                        s.tempC = t;
-                        String d = o.optString("textDescription");
-                        if (!d.isEmpty()) s.desc = d;
-                        s.station = id;
-                        break;
-                    }
-                } catch (Exception ignored) { }
+            outer:
+            for (java.util.List<String> group : java.util.Arrays.asList(official, others)) {
+                for (String id : group) {
+                    try {
+                        JSONObject o = get("https://api.weather.gov/stations/" + id + "/observations/latest").getJSONObject("properties");
+                        Double t = num(o, "temperature");
+                        Date when = iso.parse(o.getString("timestamp"));
+                        if (t != null && when != null && System.currentTimeMillis() - when.getTime() <= OBS_MAX_AGE_MS) {
+                            s.tempC = t;
+                            String d = o.optString("textDescription");
+                            if (!d.isEmpty()) s.desc = d;
+                            s.station = id;
+                            break outer;
+                        }
+                    } catch (Exception ignored) { }
+                }
             }
         } catch (Exception ignored) { }
         return s;
+    }
+
+    private static double distKm(double a1, double o1, double a2, double o2) {
+        double r = Math.PI / 180, dA = (a2 - a1) * r, dO = (o2 - o1) * r;
+        double h = Math.sin(dA / 2) * Math.sin(dA / 2) + Math.cos(a1 * r) * Math.cos(a2 * r) * Math.sin(dO / 2) * Math.sin(dO / 2);
+        return 12742 * Math.asin(Math.sqrt(h));
     }
 
     private static String wmo(int code) {
