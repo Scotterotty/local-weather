@@ -457,9 +457,18 @@ async function load() {
   render();
 }
 
+// In the Android app, share location and units with the home-screen widget.
+function shareWithWidget() {
+  const prefs = window.Capacitor?.isNativePlatform?.() ? window.Capacitor.Plugins?.Preferences : null;
+  if (!prefs) return;
+  if (current) prefs.set({ key: "lw.lastLoc", value: JSON.stringify(current) }).catch(() => {});
+  prefs.set({ key: "lw.units", value: units }).catch(() => {});
+}
+
 function setLocation(loc) {
   current = loc;
   store.set(LS.last, loc);
+  shareWithWidget();
   $("app").innerHTML = `<div class="panel state">Loading the forecast…</div>`;
   load();
   clearInterval(timer);
@@ -508,7 +517,7 @@ function reviveCache() {
   current = c.loc; lastData = d; render();
 }
 
-$("unitBtn").addEventListener("click", () => { units = units === "F" ? "C" : "F"; store.set(LS.units, units); render(); });
+$("unitBtn").addEventListener("click", () => { units = units === "F" ? "C" : "F"; store.set(LS.units, units); shareWithWidget(); render(); });
 $("locBtn").addEventListener("click", locate);
 $("refreshBtn").addEventListener("click", () => (current ? load() : locate()));
 document.addEventListener("visibilitychange", () => {
