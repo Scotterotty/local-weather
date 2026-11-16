@@ -129,7 +129,8 @@ function soundtrackHtml(d) {
       <div class="track-style">${esc(style)}</div>
       <p>${esc(why)}</p>
       <p class="track-artists">Try ${artists.map(esc).join(", ")}</p>
-      <p class="track-links"><a class="spotify" href="https://open.spotify.com/search/${q}/playlists" target="_blank" rel="noopener">Playlists on Spotify</a><a href="https://music.youtube.com/search?q=${q}" target="_blank" rel="noopener">YouTube Music</a></p>
+      <p class="track-pl"></p>
+      <p class="track-links"><a class="spotify" data-q="${esc(decodeURIComponent(q))}" href="https://open.spotify.com/search/${q}" target="_blank" rel="noopener">Find on Spotify</a><a href="https://music.youtube.com/search?q=${q}" target="_blank" rel="noopener">YouTube Music</a></p>
     </div>`;
   }).join("");
   return `<section class="panel soundtrack" aria-label="Soundtrack for your day">
@@ -149,4 +150,32 @@ function mountSoundtrack() {
   if (!html) { slot.remove(); return; }
   slot.outerHTML = html;
   if (typeof mountDJ === "function") mountDJ();
+  linkPlaylists();
+}
+
+// With Spotify connected (Weather DJ), point each Spotify button straight at a real matching playlist instead
+// of a search. Picks are cached for the day so the buttons don't change every time the screen refreshes.
+async function linkPlaylists() {
+  if (typeof djLoad !== "function" || typeof findPlaylist !== "function") return;
+  const dj = await djLoad().catch(() => ({}));
+  if (!dj.refresh) return;
+  const day = new Date().toDateString();
+  let cache = {};
+  try { cache = JSON.parse(localStorage.getItem("lw.plCache") || "{}"); } catch { }
+  if (cache.day !== day) cache = { day };
+  for (const a of document.querySelectorAll(".track-links a.spotify[data-q]")) {
+    const q = a.dataset.q;
+    let pl = cache[q];
+    if (!pl) {
+      const found = await findPlaylist(q).catch(() => null);
+      if (!found) continue;
+      pl = cache[q] = { id: found.id || found.uri.split(":").pop(), name: found.name };
+    }
+    a.href = `https://open.spotify.com/playlist/${encodeURIComponent(pl.id)}`;
+    a.textContent = "Open playlist on Spotify";
+    a.title = pl.name;
+    const name = a.closest(".track")?.querySelector(".track-pl");
+    if (name) name.textContent = `Playlist: ${pl.name}`;
+  }
+  try { localStorage.setItem("lw.plCache", JSON.stringify(cache)); } catch { }
 }
