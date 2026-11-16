@@ -13,6 +13,7 @@ import android.location.LocationManager;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
+import android.text.style.RelativeSizeSpan;
 import android.widget.RemoteViews;
 
 import androidx.annotation.NonNull;
@@ -56,6 +57,7 @@ public class WidgetUpdateWorker extends Worker {
     private static final int[][] HOUR_IDS = {
         {R.id.h0_t, R.id.h0_c, R.id.h0_p}, {R.id.h1_t, R.id.h1_c, R.id.h1_p}, {R.id.h2_t, R.id.h2_c, R.id.h2_p},
         {R.id.h3_t, R.id.h3_c, R.id.h3_p}, {R.id.h4_t, R.id.h4_c, R.id.h4_p}};
+    private static final int[] DAY_IDS = {R.id.d0, R.id.d1, R.id.d2};
 
     public WidgetUpdateWorker(@NonNull Context context, @NonNull WorkerParameters params) {
         super(context, params);
@@ -212,22 +214,50 @@ public class WidgetUpdateWorker extends Worker {
         java.util.regex.Matcher wm = java.util.regex.Pattern.compile("(\\d+)\\s*mph$").matcher(h0.optString("windSpeed", ""));
         if (wm.find()) s.windKmh = Double.parseDouble(wm.group(1)) * 1.609344;
         SimpleDateFormat isoH = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US);
-        for (int i = 1; i < hp.length() && s.hours.length() < HOURS; i++) {
+        s.isDay = h0.optBoolean("isDaytime", true);
+        for (int i = 0; i < hp.length() && i < 13; i++) {
             JSONObject h = hp.getJSONObject(i);
             Date start = isoH.parse(h.getString("startTime"));
             if (start == null || start.getTime() < System.currentTimeMillis() - 30 * 60 * 1000L) continue;
             Double pop = num(h, "probabilityOfPrecipitation");
-            s.hours.put(new JSONObject().put("t", start.getTime()).put("c", toC(h)).put("p", pop == null ? -1 : pop));
+            String sf = h.optString("shortForecast");
+            if (i > 0 && s.hours.length() < HOURS)
+                s.hours.put(new JSONObject().put("t", start.getTime()).put("c", toC(h)).put("p", pop == null ? -1 : pop)
+                    .put("e", emoji(sf, h.optBoolean("isDaytime", true))));
+            if (s.note == null && pop != null && pop >= 40) s.note = nowcast(sf, pop, start.getTime());
         }
 
         JSONArray fc = get(p.getString("forecast")).getJSONObject("properties").getJSONArray("periods");
         JSONObject f0 = fc.getJSONObject(0);
+        // Next 3 days (skip today): daytime period gives the high and icon, the night after it gives the low.
+        SimpleDateFormat dow = new SimpleDateFormat("EEE", Locale.getDefault());
+        for (int i = 1; i < fc.length() && s.days.length() < 3; i++) {
+            JSONObject f = fc.getJSONObject(i);
+            if (!f.optBoolean("isDaytime")) continue;
+            Date when = isoH.parse(f.getString("startTime"));
+            JSONObject day = new JSONObject().put("n", when != null ? dow.format(when) : f.optString("name"))
+                .put("e", emoji(f.optString("shortForecast"), true)).put("hi", toC(f));
+            if (i + 1 < fc.length() && !fc.getJSONObject(i + 1).optBoolean("isDaytime")) day.put("lo", toC(fc.getJSONObject(i + 1)));
+            s.days.put(day);
+        }
         if (f0.optBoolean("isDaytime")) {
             s.hiC = toC(f0);
             if (fc.length() > 1) s.loC = toC(fc.getJSONObject(1));
         } else {
             s.loC = toC(f0);
         }
+
+        // Active warnings/advisories for this exact point take the note line over the rain outlook.
+        try {
+            JSONArray al = get("https://api.weather.gov/alerts/active?point=" + ll).getJSONArray("features");
+            if (al.length() > 0) {
+                JSONObject ap = al.getJSONObject(0).getJSONObject("properties");
+                String until = ap.isNull("ends") ? ap.optString("expires", "") : ap.optString("ends", "");
+                Date u = until.isEmpty() ? null : isoH.parse(until);
+                s.note = "⚠️ " + ap.optString("event") + (u != null ? " until " + new SimpleDateFormat("h a", Locale.getDefault()).format(u) : "");
+                s.noteAlert = true;
+            }
+        } catch (Exception ignored) { }
 
         // Real measurement. Same rule as the app: nearest official airport station (ASOS/AWOS, e.g. KSNA)
         // within 40 km first, volunteer/fire-weather stations only as a fallback.
@@ -297,35 +327,96 @@ public class WidgetUpdateWorker extends Worker {
 
     private static Snapshot fetchOpenMeteo(double lat, double lon) throws Exception {
         String url = String.format(Locale.US,
-            "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&timezone=auto&forecast_days=1"
-                + "&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m,wind_direction_10m&daily=temperature_2m_max,temperature_2m_min"
-                + "&hourly=temperature_2m,precipitation_probability&forecast_hours=12", lat, lon);
+            "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&timezone=auto&forecast_days=4"
+                + "&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m,wind_direction_10m,is_day"
+                + "&daily=temperature_2m_max,temperature_2m_min,weather_code"
+                + "&hourly=temperature_2m,precipitation_probability,weather_code,is_day&forecast_hours=13", lat, lon);
         JSONObject d = get(url);
         Snapshot s = new Snapshot();
         s.source = "Open-Meteo";
         JSONObject c = d.getJSONObject("current");
         s.tempC = c.getDouble("temperature_2m");
         s.desc = wmo(c.optInt("weather_code", -1));
+        s.isDay = c.optInt("is_day", 1) == 1;
         if (!c.isNull("relative_humidity_2m")) s.humidity = c.optDouble("relative_humidity_2m");
         if (!c.isNull("wind_speed_10m")) s.windKmh = c.optDouble("wind_speed_10m");
         if (!c.isNull("wind_direction_10m")) s.windDir = compass(c.optDouble("wind_direction_10m"));
         JSONObject daily = d.getJSONObject("daily");
-        s.hiC = daily.getJSONArray("temperature_2m_max").getDouble(0);
-        s.loC = daily.getJSONArray("temperature_2m_min").getDouble(0);
+        JSONArray dMax = daily.getJSONArray("temperature_2m_max"), dMin = daily.getJSONArray("temperature_2m_min");
+        JSONArray dCode = daily.optJSONArray("weather_code"), dTime = daily.getJSONArray("time");
+        s.hiC = dMax.getDouble(0);
+        s.loC = dMin.getDouble(0);
+        SimpleDateFormat ymd = new SimpleDateFormat("yyyy-MM-dd", Locale.US), dow = new SimpleDateFormat("EEE", Locale.getDefault());
+        for (int i = 1; i < dTime.length() && s.days.length() < 3; i++) {
+            Date day = ymd.parse(dTime.getString(i));
+            s.days.put(new JSONObject().put("n", day != null ? dow.format(day) : "").put("hi", dMax.getDouble(i)).put("lo", dMin.getDouble(i))
+                .put("e", emoji(wmo(dCode == null ? -1 : dCode.optInt(i, -1)), true)));
+        }
         JSONObject hourly = d.getJSONObject("hourly");
         JSONArray times = hourly.getJSONArray("time"), temps = hourly.getJSONArray("temperature_2m");
         JSONArray pops = hourly.optJSONArray("precipitation_probability");
+        JSONArray hCode = hourly.optJSONArray("weather_code"), hDay = hourly.optJSONArray("is_day");
         long offset = d.optLong("utc_offset_seconds") * 1000L;
         SimpleDateFormat local = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm", Locale.US);
         local.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-        for (int i = 0; i < times.length() && s.hours.length() < HOURS; i++) {
+        for (int i = 0; i < times.length(); i++) {
             Date wall = local.parse(times.getString(i));
             if (wall == null) continue;
             long t = wall.getTime() - offset;
             if (t <= System.currentTimeMillis()) continue;
-            s.hours.put(new JSONObject().put("t", t).put("c", temps.getDouble(i)).put("p", pops == null || pops.isNull(i) ? -1 : pops.getDouble(i)));
+            double pop = pops == null || pops.isNull(i) ? -1 : pops.getDouble(i);
+            String hd = wmo(hCode == null ? -1 : hCode.optInt(i, -1));
+            if (s.hours.length() < HOURS)
+                s.hours.put(new JSONObject().put("t", t).put("c", temps.getDouble(i)).put("p", pop)
+                    .put("e", emoji(hd, hDay == null || hDay.optInt(i, 1) == 1)));
+            if (s.note == null && pop >= 40) s.note = nowcast(hd, pop, t);
         }
         return s;
+    }
+
+    // ---------- conditions: one word for the sky, an emoji, and a background ----------
+    static String kind(String desc) {
+        String d = desc == null ? "" : desc.toLowerCase(Locale.US);
+        if (d.matches(".*(thunder|t-storm).*")) return "storm";
+        if (d.matches(".*(snow|sleet|flurr|ice|freezing).*")) return "snow";
+        if (d.matches(".*(rain|shower|drizzle).*")) return "rain";
+        if (d.matches(".*(fog|haze|smoke|mist|dust).*")) return "fog";
+        if (d.matches(".*(partly|partial|scattered clouds|few clouds).*")) return "partly";
+        if (d.matches(".*(mostly sunny|mostly clear|mainly clear).*")) return "mostly";
+        if (d.matches(".*(cloud|overcast).*")) return "cloudy";
+        return "clear";
+    }
+
+    static String emoji(String desc, boolean day) {
+        switch (kind(desc)) {
+            case "storm": return "⛈️";
+            case "snow": return "🌨️";
+            case "rain": return "🌧️";
+            case "fog": return "🌫️";
+            case "cloudy": return "☁️";
+            case "partly": return day ? "⛅" : "☁️";
+            case "mostly": return day ? "🌤️" : "🌙";
+            default: return day ? "☀️" : "🌙";
+        }
+    }
+
+    private static int background(String desc, boolean day, boolean dusk) {
+        switch (kind(desc)) {
+            case "storm": return R.drawable.widget_bg_storm;
+            case "snow": return R.drawable.widget_bg_snow;
+            case "rain": return R.drawable.widget_bg_rain;
+            case "fog": return R.drawable.widget_bg_fog;
+            case "cloudy": return day ? R.drawable.widget_bg_day_cloudy : R.drawable.widget_bg_night_cloudy;
+            default: return dusk ? R.drawable.widget_bg_dusk : day ? R.drawable.widget_bg_day_clear : R.drawable.widget_bg_night_clear;
+        }
+    }
+
+    private static String nowcast(String desc, double pop, long at) {
+        String k = kind(desc);
+        String what = "snow".equals(k) ? "snow" : "storm".equals(k) ? "storms" : "rain";
+        String icon = "snow".equals(k) ? "🌨️" : "storm".equals(k) ? "⛈️" : "🌧️";
+        boolean soon = at - System.currentTimeMillis() < 60 * 60 * 1000L;
+        return icon + " " + Math.round(pop) + "% chance of " + what + (soon ? " this hour" : " by " + new SimpleDateFormat("h a", Locale.getDefault()).format(new Date(at)));
     }
 
     // Air quality (US EPA AQI) and UV index: Open-Meteo's air-quality model, same as the app.
@@ -371,32 +462,53 @@ public class WidgetUpdateWorker extends Worker {
         return Math.round(useC ? c : c * 9 / 5 + 32) + "°";
     }
 
-    private static void render(Context ctx, Snapshot s, String message) {
+    static void render(Context ctx, Snapshot s, String message) {
         AppWidgetManager m = AppWidgetManager.getInstance(ctx);
         int[] ids = m.getAppWidgetIds(new ComponentName(ctx, WeatherWidget.class));
-        if (ids.length == 0) return;
-        boolean useC = celsius(ctx);
+        for (int id : ids) {
+            // Height in dp the launcher gives this widget (portrait). Rows are dropped on short widgets so nothing gets cut off.
+            android.os.Bundle o = m.getAppWidgetOptions(id);
+            int h = o == null ? 0 : o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0);
+            m.updateAppWidget(id, build(ctx, s, message, h <= 0 ? 220 : h));
+        }
+    }
 
+    private static RemoteViews build(Context ctx, Snapshot s, String message, int heightDp) {
+        boolean useC = celsius(ctx);
+        int gone = android.view.View.GONE, shown = android.view.View.VISIBLE;
         RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.widget_weather);
+        long now = System.currentTimeMillis();
         if (s == null) {
             v.setTextViewText(R.id.w_place, "Sunnyloha");
             v.setTextViewText(R.id.w_temp, "–");
+            v.setTextViewText(R.id.w_icon, "");
             v.setTextViewText(R.id.w_desc, message != null ? message : "");
             v.setTextViewText(R.id.w_hilo, "");
-            v.setViewVisibility(R.id.w_air, android.view.View.GONE);
+            v.setViewVisibility(R.id.w_air, gone);
             v.setTextViewText(R.id.w_updated, "");
-            v.setViewVisibility(R.id.w_hours, android.view.View.GONE);
+            v.setViewVisibility(R.id.w_hours, gone);
+            v.setViewVisibility(R.id.w_days, gone);
+            v.setViewVisibility(R.id.w_note, gone);
             v.setTextViewText(R.id.w_sky, "");
         } else {
+            // Day/night and dusk from the sun's position at this spot
+            long[] sun = (s.lat != 0 || s.lon != 0) ? Astro.sun(s.lat, s.lon, now) : new long[]{0, 0};
+            boolean day = sun[0] != 0 ? now >= sun[0] && now < sun[1] : s.isDay;
+            boolean dusk = sun[0] != 0 && (Math.abs(now - sun[1]) < 40 * 60 * 1000L || Math.abs(now - sun[0]) < 40 * 60 * 1000L);
+            v.setInt(R.id.w_root, "setBackgroundResource", background(s.desc, day, dusk));
+
             v.setTextViewText(R.id.w_place, s.place != null ? s.place : "Current location");
             v.setTextViewText(R.id.w_temp, fmt(s.tempC, useC));
+            v.setTextViewText(R.id.w_icon, emoji(s.desc, day));
             v.setTextViewText(R.id.w_desc, s.desc != null ? s.desc : "");
             StringBuilder hl = new StringBuilder();
             if (s.hiC != null) hl.append("H ").append(fmt(s.hiC, useC));
             if (s.loC != null) hl.append(hl.length() > 0 ? "  " : "").append("L ").append(fmt(s.loC, useC));
             v.setTextViewText(R.id.w_hilo, hl.toString());
+            String when = DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date(s.time));
+            v.setTextViewText(R.id.w_updated, (s.station != null ? s.station + " · " : "") + when);
 
-            // Air quality and UV, with a colored dot for the level (same colors as the app)
+            // Wind, humidity, air quality and UV, with a colored dot for the level (same colors as the app)
             SpannableStringBuilder air = new SpannableStringBuilder();
             if (s.windKmh != null) {
                 long w = Math.round(useC ? s.windKmh : s.windKmh / 1.609344);
@@ -410,34 +522,58 @@ public class WidgetUpdateWorker extends Worker {
                 dot(air, uvColor(uv)); air.append("UV ").append(String.valueOf(uv));
             }
             v.setTextViewText(R.id.w_air, air);
-            v.setViewVisibility(R.id.w_air, air.length() > 0 ? android.view.View.VISIBLE : android.view.View.GONE);
-            String when = DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date(s.time));
-            v.setTextViewText(R.id.w_updated, (s.station != null ? s.station + " · " : "") + when);
+            v.setViewVisibility(R.id.w_air, air.length() > 0 ? shown : gone);
 
-            // Next few hours
+            // Next few hours, each with its own sky icon
             SimpleDateFormat hourFmt = new SimpleDateFormat("h a", Locale.getDefault());
-            int shown = 0;
+            int count = 0;
             for (int i = 0; i < HOURS; i++) {
-                JSONObject h = s.hours.optJSONObject(i);
-                if (h == null) {
-                    v.setTextViewText(HOUR_IDS[i][0], ""); v.setTextViewText(HOUR_IDS[i][1], ""); v.setTextViewText(HOUR_IDS[i][2], "");
+                JSONObject hr = s.hours.optJSONObject(i);
+                if (hr == null) {
+                    for (int k = 0; k < 3; k++) v.setTextViewText(HOUR_IDS[i][k], "");
                     continue;
                 }
-                shown++;
-                v.setTextViewText(HOUR_IDS[i][0], hourFmt.format(new Date(h.optLong("t"))));
-                v.setTextViewText(HOUR_IDS[i][1], fmt(h.optDouble("c"), useC));
-                double pop = h.optDouble("p", -1);
+                count++;
+                v.setTextViewText(HOUR_IDS[i][0], hourFmt.format(new Date(hr.optLong("t"))));
+                SpannableStringBuilder ht = new SpannableStringBuilder(hr.optString("e", ""));
+                if (ht.length() > 0) { ht.setSpan(new RelativeSizeSpan(0.85f), 0, ht.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE); ht.append(" "); }
+                ht.append(fmt(hr.optDouble("c"), useC));
+                v.setTextViewText(HOUR_IDS[i][1], ht);
+                double pop = hr.optDouble("p", -1);
                 v.setTextViewText(HOUR_IDS[i][2], pop >= 10 ? Math.round(pop) + "%" : "");
             }
-            v.setViewVisibility(R.id.w_hours, shown > 0 ? android.view.View.VISIBLE : android.view.View.GONE);
+            v.setViewVisibility(R.id.w_hours, count > 0 ? shown : gone);
+
+            // Next 3 days, on taller widgets
+            int days = 0;
+            for (int i = 0; i < DAY_IDS.length; i++) {
+                JSONObject d = s.days.optJSONObject(i);
+                if (d == null) { v.setTextViewText(DAY_IDS[i], ""); continue; }
+                days++;
+                String lo = d.has("lo") ? " " + fmt(d.optDouble("lo"), useC) : "";
+                SpannableStringBuilder t = new SpannableStringBuilder(d.optString("n") + "  " + d.optString("e") + " " + fmt(d.optDouble("hi"), useC));
+                int at = t.length();
+                t.append(lo);
+                t.setSpan(new ForegroundColorSpan(0xB3FFFFFF), at, t.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                v.setTextViewText(DAY_IDS[i], t);
+            }
+            // Weather alert, or when rain/snow is next likely
+            v.setTextViewText(R.id.w_note, s.note != null ? s.note : "");
+
+            // Fit the optional rows to the widget's height (about 170 dp for the rest). Alerts win over the 3-day strip.
+            int spare = heightDp - 170;
+            boolean showNote = false, showDays = false;
+            if (s.note != null && s.noteAlert && spare >= 22) { showNote = true; spare -= 22; }
+            if (days > 0 && spare >= 24) { showDays = true; spare -= 24; }
+            if (s.note != null && !showNote && spare >= 22) showNote = true;
+            v.setViewVisibility(R.id.w_days, showDays ? shown : gone);
+            v.setViewVisibility(R.id.w_note, showNote ? shown : gone);
 
             // Sun and moon, calculated on the phone
-            long now = System.currentTimeMillis();
             StringBuilder sky = new StringBuilder();
-            if (s.lat != 0 || s.lon != 0) {
-                long[] sun = Astro.sun(s.lat, s.lon, now);
+            if (sun[0] != 0) {
                 DateFormat tf = DateFormat.getTimeInstance(DateFormat.SHORT);
-                if (sun[0] != 0) sky.append("↑ ").append(tf.format(new Date(sun[0]))).append("   ↓ ").append(tf.format(new Date(sun[1]))).append("   ");
+                sky.append("↑ ").append(tf.format(new Date(sun[0]))).append("   ↓ ").append(tf.format(new Date(sun[1]))).append("   ");
             }
             sky.append(Astro.moonLabel(now)).append(" ").append(Astro.moonLitPercent(now)).append("%");
             v.setTextViewText(R.id.w_sky, sky.toString());
@@ -446,7 +582,7 @@ public class WidgetUpdateWorker extends Worker {
         Intent open = new Intent(ctx, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pi = PendingIntent.getActivity(ctx, 0, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         v.setOnClickPendingIntent(R.id.w_root, pi);
-        m.updateAppWidget(ids, v);
+        return v;
     }
 
     // ---------- cached result ----------
@@ -454,6 +590,9 @@ public class WidgetUpdateWorker extends Worker {
         String place, desc, station, source;
         Double tempC, hiC, loC;
         Double windKmh, humidity;
+        boolean isDay = true, noteAlert;
+        String note;
+        JSONArray days = new JSONArray();
         String windDir;
         int aqi = -1;
         double uv = Double.NaN;
@@ -473,6 +612,7 @@ public class WidgetUpdateWorker extends Worker {
                 if (windKmh != null) o.put("windKmh", windKmh);
                 if (humidity != null) o.put("humidity", humidity);
                 o.put("windDir", windDir);
+                o.put("isDay", isDay); o.put("note", note); o.put("noteAlert", noteAlert); o.put("days", days);
                 if (!Double.isNaN(uv)) o.put("uv", uv);
                 o.put("lat", lat); o.put("lon", lon); o.put("hours", hours);
                 ctx.getSharedPreferences(CACHE, Context.MODE_PRIVATE).edit().putString("snapshot", o.toString()).apply();
@@ -497,6 +637,11 @@ public class WidgetUpdateWorker extends Worker {
                 s.windKmh = o.has("windKmh") ? o.getDouble("windKmh") : null;
                 s.humidity = o.has("humidity") ? o.getDouble("humidity") : null;
                 s.windDir = o.isNull("windDir") ? null : o.optString("windDir", null);
+                s.isDay = o.optBoolean("isDay", true);
+                s.note = o.isNull("note") ? null : o.optString("note", null);
+                s.noteAlert = o.optBoolean("noteAlert");
+                JSONArray ds = o.optJSONArray("days");
+                if (ds != null) s.days = ds;
                 s.uv = o.optDouble("uv", Double.NaN);
                 s.lat = o.optDouble("lat", 0); s.lon = o.optDouble("lon", 0);
                 JSONArray hs = o.optJSONArray("hours");

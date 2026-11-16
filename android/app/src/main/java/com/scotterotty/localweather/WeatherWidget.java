@@ -14,6 +14,11 @@ public class WeatherWidget extends AppWidgetProvider {
     }
 
     @Override
+    public void onAppWidgetOptionsChanged(Context context, AppWidgetManager manager, int id, android.os.Bundle options) {
+        WidgetUpdateWorker.renderCached(context);   // resized: re-layout for the new height
+    }
+
+    @Override
     public void onEnabled(Context context) {
         WidgetUpdateWorker.schedulePeriodic(context);
     }
