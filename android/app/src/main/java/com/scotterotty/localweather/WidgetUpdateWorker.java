@@ -299,6 +299,15 @@ public class WidgetUpdateWorker extends Worker {
         return s;
     }
 
+    // Arrow for where the wind is blowing TO (wind is named for where it comes from).
+    private static String windArrow(String dir) {
+        String[] d = {"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"};
+        String[] arrows = {"↑", "↗", "→", "↘", "↓", "↙", "←", "↖"};
+        for (int i = 0; i < d.length; i++)
+            if (d[i].equalsIgnoreCase(dir)) return arrows[(int) Math.round(((i * 22.5 + 180) % 360) / 45) % 8];
+        return "";
+    }
+
     private static String compass(double deg) {
         String[] d = {"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"};
         return d[(int) Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
@@ -512,7 +521,8 @@ public class WidgetUpdateWorker extends Worker {
             SpannableStringBuilder air = new SpannableStringBuilder();
             if (s.windKmh != null) {
                 long w = Math.round(useC ? s.windKmh : s.windKmh / 1.609344);
-                air.append("💨 ").append(w < 1 ? "Calm" : (s.windDir != null && !s.windDir.isEmpty() ? s.windDir + " " : "") + w + (useC ? " km/h" : " mph")).append("  ");
+                String arrow = s.windDir != null ? windArrow(s.windDir) : "";
+                air.append("💨 ").append(w < 1 ? "Calm" : (arrow.isEmpty() ? "" : arrow + " ") + (s.windDir != null && !s.windDir.isEmpty() ? s.windDir + " " : "") + w + (useC ? " km/h" : " mph")).append("  ");
             }
             if (s.humidity != null) air.append("💧 ").append(String.valueOf(Math.round(s.humidity))).append("%  ");
             if (s.aqi >= 0) { dot(air, aqiColor(s.aqi)); air.append("AQI ").append(String.valueOf(s.aqi)); }

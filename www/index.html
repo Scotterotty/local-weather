@@ -66,6 +66,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
 .now { display: grid; grid-template-columns: auto 1fr; gap: 8px 20px; align-items: center; }
 .now .big, .day .range, .hour .temp, .stat .s { font-size: .75rem; color: var(--muted); line-height: 1.3; }
+.wind-arrow { display: inline-block; width: .85em; height: .85em; margin-right: 5px; vertical-align: -.05em; color: var(--accent); }
 .aqi-dot { display: inline-block; width: .7em; height: .7em; border-radius: 50%; margin-right: 6px; vertical-align: .05em; box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 20%, transparent); }
 .stat .v { font-size-adjust: var(--display-adjust, none); }
 .now .big { font: 500 5rem/1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
@@ -304,6 +305,16 @@ const wind = (kmh) => kmh == null || isNaN(kmh) ? "–" : units === "F" ? Math.r
 const vis = (km) => km == null || isNaN(km) ? "–" : units === "F" ? (Math.round(km / 1.609344 * 10) / 10) + " mi" : (Math.round(km * 10) / 10) + " km";
 const pres = (hpa) => hpa == null || isNaN(hpa) ? "–" : units === "F" ? (hpa * 0.02953).toFixed(2) + " inHg" : Math.round(hpa) + " hPa";
 const compass = (deg) => deg == null || isNaN(deg) ? "" : ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"][Math.round(deg / 22.5) % 16];
+const WIND_DIRS = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+const DIR_NAMES = ["north","north-northeast","northeast","east-northeast","east","east-southeast","southeast","south-southeast","south","south-southwest","southwest","west-southwest","west","west-northwest","northwest","north-northwest"];
+const dirIndex = (letters) => WIND_DIRS.indexOf(String(letters || "").toUpperCase());
+const isCalm = (kmh) => kmh != null && kmh < 1.6;
+// Arrow points the way the wind is blowing (wind is named for where it comes FROM, so it's turned 180°).
+function windArrow(letters) {
+  const i = dirIndex(letters);
+  if (i < 0) return "";
+  return `<svg class="wind-arrow" viewBox="0 0 16 16" aria-hidden="true" style="transform:rotate(${i * 22.5 + 180}deg)"><path d="M8 1.5 13 13 8 10.5 3 13Z" fill="currentColor"/></svg>`;
+}
 function mphStrToKmh(s) {           // NWS gives "5 to 10 mph"; take the upper number
   const nums = String(s || "").match(/\d+/g);
   return nums ? Math.max(...nums.map(Number)) * 1.609344 : null;
@@ -849,7 +860,7 @@ const TERMS = {
       const mph = lastData?.current.windKmh != null ? lastData.current.windKmh / 1.609344 : null;
       return scaleList([["0–3 mph", "Calm. Smoke rises straight up"], ["4–7 mph", "Light breeze. You feel it on your face"], ["8–12 mph", "Leaves and small twigs keep moving"], ["13–18 mph", "Dust and loose paper blow around"], ["19–24 mph", "Small trees sway"], ["25–31 mph", "Hard to use an umbrella"], ["32+ mph", "Whole trees move. Hard to walk into it"]], mph == null ? -1 : pickIdx(mph, [4, 8, 13, 19, 25, 32]));
     },
-    now: (c) => c.windKmh == null ? null : `${c.windDir ? `Coming from the ${c.windDir}` : "Blowing"} at ${wind(c.windKmh)}.`
+    now: (c) => c.windKmh == null ? null : isCalm(c.windKmh) ? "Calm: almost no wind right now." : `${dirIndex(c.windDir) >= 0 ? `Coming from the ${DIR_NAMES[dirIndex(c.windDir)]} (${c.windDir}) and blowing the way the arrow points` : "Blowing"} at ${wind(c.windKmh)}.`
   },
   gusts: {
     title: "Gusts",
@@ -1154,7 +1165,8 @@ function render() {
   const c = d.current;
 
   const stats = [
-    ["wind", "Wind", c.windKmh != null ? `${c.windDir ? c.windDir + " " : ""}${wind(c.windKmh)}` : "–"],
+    ["wind", "Wind", c.windKmh == null ? "–" : isCalm(c.windKmh) ? "Calm" : `${c.windDir ? c.windDir + " " : ""}${wind(c.windKmh)}`,
+      !isCalm(c.windKmh) && dirIndex(c.windDir) >= 0 ? `From the ${DIR_NAMES[dirIndex(c.windDir)]}` : ""],
     ["gusts", "Gusts", wind(c.gustKmh)],
     ["humidity", "Humidity", c.humidity != null ? Math.round(c.humidity) + "%" : "–"],
     ["dew", "Dew point", t(c.dewC)],
@@ -1177,7 +1189,7 @@ function render() {
       ${c.feelsC != null && Math.abs(c.feelsC - c.tempC) >= 1 ? `<div class="feels">${termBtn("feels", "Feels like")} ${t(c.feelsC)}</div>` : ""}
       ${(() => { const hl = [d.days[0]?.hiC != null && "High " + t(d.days[0].hiC), d.days[0]?.loC != null && "Low " + t(d.days[0].loC)].filter(Boolean).join(" · "); return hl ? `<div class="feels">${termBtn("hilo", hl)}</div>` : ""; })()}
     </div>
-    ${stats.length ? `<div class="stats">${stats.map(([key, k, v, sub, dot]) => `<div class="stat"><div class="k">${termBtn(key, k)}</div><div class="v">${dot ? `<span class="aqi-dot" style="background:${dot}"></span>` : ""}${esc(v)}</div>${sub ? `<div class="s">${esc(sub[0].toUpperCase() + sub.slice(1))}</div>` : ""}</div>`).join("")}</div>` : ""}
+    ${stats.length ? `<div class="stats">${stats.map(([key, k, v, sub, dot]) => `<div class="stat"><div class="k">${termBtn(key, k)}</div><div class="v">${dot ? `<span class="aqi-dot" style="background:${dot}"></span>` : ""}${key === "wind" && !isCalm(c.windKmh) ? windArrow(c.windDir) : ""}${esc(v)}</div>${sub ? `<div class="s">${esc(sub[0].toUpperCase() + sub.slice(1))}</div>` : ""}</div>`).join("")}</div>` : ""}
     ${(() => {
       const sun = sunTimes(current.lat, current.lon), mp = moonPhase();
       const len = sun.rise && sun.set ? (sun.set - sun.rise) / 36e5 : null;
