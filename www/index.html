@@ -182,6 +182,9 @@ footer .term { font-size: .8rem; }
 .radar-legend { margin-top: 10px; display: grid; gap: 4px; }
 .radar-legend .ramp { height: 10px; border-radius: 5px; background: linear-gradient(90deg, #04e9e7 0%, #019ff4 12%, #02fd02 22%, #01c501 32%, #008e00 40%, #fdf802 50%, #e5bc00 57%, #fd9500 64%, #fd0000 72%, #d40000 79%, #bc0000 85%, #f800fd 92%, #9854c6 100%); }
 .radar-legend .words { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); }
+.radar-modes { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; margin: 2px 0 8px; }
+.radar-modes button { border: 0; background: none; color: var(--muted); font: 500 .85rem var(--body, inherit); padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+.radar-modes button[aria-pressed="true"] { background: var(--accent); color: var(--bg); }
 .radar-note { font-size: .8rem; color: var(--muted); margin: 8px 0 0; }
 .leaflet-container { font: .7rem var(--body); background: var(--line); }
 .leaflet-control-attribution { background: color-mix(in srgb, var(--surface) 80%, transparent) !important; color: var(--muted) !important; }
@@ -597,10 +600,28 @@ function moonIcon(m, size = 28) {
 const esri = (name) => `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${name}/MapServer/tile/{z}/{y}/{x}`;
 const baseUrlFor = (dark) => esri(dark ? "World_Dark_Gray_Base" : "World_Light_Gray_Base");
 const labelUrlFor = (dark) => esri(dark ? "World_Dark_Gray_Reference" : "World_Light_Gray_Reference");
-// NOAA NEXRAD national composite (base reflectivity), rebuilt every 5 minutes by the Iowa Environmental Mesonet.
-const RADAR_FRAMES = [50, 45, 40, 35, 30, 25, 20, 15, 10, 5, 0];
+// Two timelines share one map:
+//  past:   NOAA NEXRAD national composite (base reflectivity), rebuilt every 5 minutes by the Iowa Environmental Mesonet.
+//  future: "Now" is live NEXRAD, then NOAA's HRRR model (3 km, rerun every hour) simulated radar, every 30 min for 6 hours.
+const PAST_FRAMES = [50, 45, 40, 35, 30, 25, 20, 15, 10, 5, 0];          // minutes ago
+const FUTURE_FRAMES = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360];  // minutes ahead
 const radarTileUrl = (m) => `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913${m ? `-m${String(m).padStart(2, "0")}m` : ""}/{z}/{x}/{y}.png`;
-let radar = null;   // { el, map, base, layers, marker, idx, timer, playing }
+const hrrrTileUrl = (lead, run) => `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/hrrr::REFD-F${String(lead).padStart(4, "0")}-${run}/{z}/{x}/{y}.png`;
+const runStamp = (d) => d.toISOString().slice(0, 16).replace(/[-T:]/g, "");   // YYYYMMDDHHMI (UTC)
+let radar = null;   // { el, map, base, labels, marker, mode, sets, idx, timer, playing, run }
+
+// Which HRRR run to use. IEM finishes each run about 1h50m after its start time, so a run 2+ hours old always exists.
+// Ask IEM for the newest one first; if that fails, the safe guess is still a real run, just up to an hour older.
+async function latestHrrrRun() {
+  const safe = new Date(Date.now() - 2 * 3600e3); safe.setUTCMinutes(0, 0, 0);
+  try {
+    const ctl = new AbortController(); setTimeout(() => ctl.abort(), 5000);
+    const j = await (await fetch("https://mesonet.agron.iastate.edu/data/gis/images/4326/hrrr/refd_1080.json", { signal: ctl.signal, cache: "no-store" })).json();
+    const t = new Date(j.model_init_utc);
+    if (!isNaN(t) && t > safe && t <= Date.now()) return t;
+  } catch { /* fall through */ }
+  return safe;
+}
 
 function radarPanel() {
   if (radar) return radar.el;
@@ -609,25 +630,39 @@ function radarPanel() {
   el.setAttribute("aria-label", "Radar");
   el.innerHTML = `
     <h2 class="label">Radar</h2>
-    <div class="hint">${termBtn("radar", "What the colors mean")} · last 50 minutes</div>
+    <div class="radar-modes" role="group" aria-label="Radar time range">
+      <button type="button" data-mode="future" aria-pressed="true">Next 6 hours</button>
+      <button type="button" data-mode="past" aria-pressed="false">Past hour</button>
+    </div>
+    <div class="hint" id="radarHint"></div>
     <div class="radar-map" id="radarMap" role="img" aria-label="Radar map of rain and snow near you"></div>
     <div class="radar-bar">
       <button type="button" id="radarPlay">Pause</button>
-      <input type="range" id="radarSlider" min="0" max="${RADAR_FRAMES.length - 1}" value="${RADAR_FRAMES.length - 1}" aria-label="Radar time">
-      <span class="when" id="radarWhen">Latest</span>
+      <input type="range" id="radarSlider" min="0" value="0" aria-label="Radar time">
+      <span class="when" id="radarWhen">Now</span>
     </div>
     <div class="radar-legend" aria-hidden="true"><div class="ramp"></div>
       <div class="words"><span>Drizzle</span><span>Light rain</span><span>Heavy rain</span><span>Storms</span><span>Hail</span></div></div>
     <p class="radar-note" id="radarNote" hidden></p>`;
-  radar = { el, map: null, layers: [], idx: RADAR_FRAMES.length - 1, timer: null, playing: false };
+  radar = { el, map: null, mode: "future", sets: { past: [], future: [] }, idx: 0, timer: null, playing: false, run: null };
   return el;
 }
 
+const radarFrames = () => radar.mode === "past" ? PAST_FRAMES : FUTURE_FRAMES;
+const radarLayers = () => radar.sets[radar.mode];
+
+function frameLabel(i) {
+  const m = radarFrames()[i];
+  if (radar.mode === "past") return m === 0 ? "Latest" : `${m} min earlier`;
+  if (m === 0) return "Now";
+  const at = new Date(Math.round((Date.now() + m * 60e3) / 900e3) * 900e3);
+  const ahead = m < 60 ? `${m} min` : `${m / 60} hr`;
+  return `${fmtTime(at)} · in ${ahead}`;
+}
 function showFrame(i) {
   radar.idx = i;
-  radar.layers.forEach((l, j) => l.setOpacity(j === i ? 0.75 : 0));
-  const m = RADAR_FRAMES[i];
-  $("radarWhen").textContent = m === 0 ? "Latest" : `${m} min earlier`;
+  for (const [mode, set] of Object.entries(radar.sets)) set.forEach((l, j) => l.setOpacity(mode === radar.mode && j === i ? 0.75 : 0));
+  $("radarWhen").textContent = frameLabel(i);
   $("radarSlider").value = i;
 }
 function playRadar(on) {
@@ -635,12 +670,44 @@ function playRadar(on) {
   $("radarPlay").textContent = on ? "Pause" : "Play";
   clearTimeout(radar.timer);
   if (!on) return;
+  const n = radarFrames().length;
   const step = () => {
-    const next = (radar.idx + 1) % RADAR_FRAMES.length;
+    const next = (radar.idx + 1) % n;
     showFrame(next);
-    radar.timer = setTimeout(step, next === RADAR_FRAMES.length - 1 ? 1800 : 550);   // pause on the latest frame
+    radar.timer = setTimeout(step, next === n - 1 || next === 0 && radar.mode === "future" ? 1800 : 600);   // linger on "latest" / "now" and the last frame
   };
-  radar.timer = setTimeout(step, 700);
+  radar.timer = setTimeout(step, 900);
+}
+
+// HRRR lead time (minutes after the run started) for a frame m minutes from now, snapped to the model's 15-minute steps.
+function hrrrLead(m) {
+  const target = Date.now() + m * 60e3;
+  return Math.min(1080, Math.max(0, Math.round((target - radar.run) / 900e3) * 15));
+}
+function buildFutureLayers() {
+  const run = runStamp(radar.run);
+  const opts = { opacity: 0, maxNativeZoom: 10, maxZoom: 11, zIndex: 5 };
+  const urls = FUTURE_FRAMES.map((m) => m === 0 ? radarTileUrl(0) : hrrrTileUrl(hrrrLead(m), run));
+  if (radar.sets.future.length) radar.sets.future.forEach((l, j) => l.setUrl(urls[j]));
+  else radar.sets.future = urls.map((u) => L.tileLayer(u, opts).addTo(radar.map));
+}
+
+function setRadarMode(mode) {
+  radar.mode = mode;
+  radar.el.querySelectorAll(".radar-modes button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
+  const n = radarFrames().length;
+  $("radarSlider").max = n - 1;
+  $("radarHint").innerHTML = mode === "past"
+    ? `${termBtn("radar", "What the colors mean")} · real radar, last 50 minutes`
+    : `${termBtn("radarcast", "Forecast radar")} · computer model, next 6 hours${radar.run ? ` (run from ${fmtTime(radar.run)})` : ""}`;
+  showFrame(mode === "past" ? n - 1 : 0);
+  playRadar(!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+}
+
+async function refreshForecastRadar() {
+  radar.run = await latestHrrrRun();
+  buildFutureLayers();
+  if (radar.mode === "future") setRadarMode("future");
 }
 
 function mountRadar() {
@@ -654,27 +721,32 @@ function mountRadar() {
   if (!radar.map) {
     radar.map = L.map($("radarMap"), { zoomControl: true, scrollWheelZoom: false, attributionControl: true, maxZoom: 11, minZoom: 4 })
       .setView([current.lat, current.lon], 8);
-    radar.base = L.tileLayer(baseUrl, { maxZoom: 16, attribution: 'Map &copy; <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>, HERE, Garmin, &copy; OpenStreetMap · Radar: NOAA via <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">IEM</a>' }).addTo(radar.map);
+    radar.base = L.tileLayer(baseUrl, { maxZoom: 16, attribution: 'Map &copy; <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>, HERE, Garmin, &copy; OpenStreetMap · Radar &amp; HRRR: NOAA via <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">IEM</a>' }).addTo(radar.map);
     radar.map.createPane("labels");
     radar.map.getPane("labels").style.zIndex = 650;
     radar.map.getPane("labels").style.pointerEvents = "none";
     radar.labels = L.tileLayer(labelUrlFor(dark), { maxZoom: 16, pane: "labels" }).addTo(radar.map);
-    radar.layers = RADAR_FRAMES.map((m) => L.tileLayer(radarTileUrl(m), { opacity: 0, maxNativeZoom: 10, maxZoom: 11, zIndex: 5 }).addTo(radar.map));
+    radar.sets.past = PAST_FRAMES.map((m) => L.tileLayer(radarTileUrl(m), { opacity: 0, maxNativeZoom: 10, maxZoom: 11, zIndex: 5 }).addTo(radar.map));
     radar.marker = L.circleMarker([current.lat, current.lon], { radius: 6, weight: 2, color: "#fff", fillColor: getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#1d6fa5", fillOpacity: 1 }).addTo(radar.map);
     $("radarSlider").addEventListener("input", (e) => { playRadar(false); showFrame(+e.target.value); });
     $("radarPlay").addEventListener("click", () => playRadar(!radar.playing));
-    showFrame(RADAR_FRAMES.length - 1);
-    playRadar(!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    el.querySelectorAll(".radar-modes button").forEach((b) => b.addEventListener("click", () => { if (b.dataset.mode !== radar.mode) setRadarMode(b.dataset.mode); }));
+    // Start with live radar as "Now" while the model run is looked up, then fill in the forecast frames.
+    radar.run = null;
+    radar.sets.future = [];
+    setRadarMode("future");
+    refreshForecastRadar();
   } else {
     radar.base.setUrl(baseUrl);
     radar.labels.setUrl(labelUrlFor(dark));
     radar.marker.setLatLng([current.lat, current.lon]);
-    // Refresh radar tiles every time the forecast refreshes (frames are relative to "now").
-    radar.layers.forEach((l) => l.redraw());
+    // Refresh tiles every time the forecast refreshes (frames are relative to "now").
+    radar.sets.past.forEach((l) => l.redraw());
+    refreshForecastRadar();
   }
   const inUS = lastData?.source === "National Weather Service";
   $("radarNote").hidden = inUS;
-  if (!inUS) $("radarNote").textContent = "NEXRAD radar covers the United States. Outside the US the map may be blank.";
+  if (!inUS) $("radarNote").textContent = "NEXRAD radar and the HRRR forecast cover the United States. Outside the US the map may be blank.";
   requestAnimationFrame(() => radar.map.invalidateSize());
 }
 function recenterRadar() {
@@ -824,7 +896,14 @@ const TERMS = {
     aka: "NEXRAD: the National Weather Service's network of 160 Doppler radars",
     what: "A radar dish sends out pulses of radio waves. When they hit raindrops, snowflakes or hail, some bounce back. The stronger the echo, the bigger or more numerous the drops, and the brighter the color. Blue and green are light rain, yellow and orange are heavy rain, red is very heavy rain with storms, and pink or purple usually means hail. Watching the animation shows which way the rain is moving.",
     extra: () => scaleList([["Blue, green", "Drizzle to light rain"], ["Yellow", "Moderate rain"], ["Orange, red", "Heavy rain, thunderstorms"], ["Pink, purple", "Hail likely"]], -1),
-    now: () => "Each frame is 5 minutes apart and covers the last 50 minutes. Radar can't see very light drizzle close to the ground far from the radar, and sometimes shows birds or bugs as faint blue specks at night."
+    now: () => "Past hour: real radar, 5 minutes per frame. Next 6 hours: a forecast (see Forecast radar). Radar can't see very light drizzle close to the ground far from the radar, and sometimes shows birds or bugs as faint blue specks at night."
+  },
+  radarcast: {
+    title: "Forecast radar",
+    aka: "HRRR: NOAA's High-Resolution Rapid Refresh model. \"Simulated reflectivity\"",
+    what: "Real radar can only show rain that is already falling. To look ahead, a supercomputer at NOAA runs a weather model every hour: it starts from the latest radar, satellite, balloon and station readings, then uses physics to work out how the air, clouds and rain will move. It then draws what the radar would look like if that came true. The colors mean the same as real radar. The first frame (Now) is real radar, so you can compare.",
+    extra: () => scaleList([["Next 1–2 hours", "Usually close on where rain is and which way it's going"], ["3–6 hours", "Good for the big picture. Exact timing can be off by an hour or more"], ["Pop-up showers, storms", "Hardest to pin down. Treat the exact spot as a guess"]], -1),
+    now: () => radar?.run ? `Showing the model run that started at ${fmtTime(radar.run)}. A new run comes out every hour, about 2 hours after it starts.` : "A new model run comes out every hour."
   },
   station: {
     title: "Weather station",
@@ -861,7 +940,7 @@ function explain(key) {
   if (!dlg.open) dlg.showModal();
   $("explainBody").scrollTop = 0;
 }
-const TERM_ORDER = ["temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "aqi", "visibility", "pop", "amount", "radar", "sunrise", "moon", "station", "forecast", "hourly", "alerts"];
+const TERM_ORDER = ["temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "aqi", "visibility", "pop", "amount", "radar", "radarcast", "sunrise", "moon", "station", "forecast", "hourly", "alerts"];
 function explainAll() {
   const order = TERM_ORDER;
   
