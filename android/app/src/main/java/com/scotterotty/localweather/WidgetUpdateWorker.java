@@ -207,6 +207,10 @@ public class WidgetUpdateWorker extends Worker {
         JSONObject h0 = hp.getJSONObject(0);
         s.tempC = toC(h0);
         s.desc = h0.optString("shortForecast");
+        s.humidity = num(h0, "relativeHumidity");
+        s.windDir = h0.optString("windDirection", null);
+        java.util.regex.Matcher wm = java.util.regex.Pattern.compile("(\\d+)\\s*mph$").matcher(h0.optString("windSpeed", ""));
+        if (wm.find()) s.windKmh = Double.parseDouble(wm.group(1)) * 1.609344;
         SimpleDateFormat isoH = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US);
         for (int i = 1; i < hp.length() && s.hours.length() < HOURS; i++) {
             JSONObject h = hp.getJSONObject(i);
@@ -253,6 +257,9 @@ public class WidgetUpdateWorker extends Worker {
                             String d = o.optString("textDescription");
                             if (!d.isEmpty()) s.desc = d;
                             s.station = id;
+                            Double rh = num(o, "relativeHumidity"), ws = num(o, "windSpeed"), wd = num(o, "windDirection");
+                            if (rh != null) s.humidity = rh;
+                            if (ws != null) { s.windKmh = ws; s.windDir = wd != null && ws >= 1 ? compass(wd) : null; }
                             break outer;
                         }
                     } catch (Exception ignored) { }
@@ -260,6 +267,11 @@ public class WidgetUpdateWorker extends Worker {
             }
         } catch (Exception ignored) { }
         return s;
+    }
+
+    private static String compass(double deg) {
+        String[] d = {"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"};
+        return d[(int) Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
     }
 
     private static double distKm(double a1, double o1, double a2, double o2) {
@@ -286,7 +298,7 @@ public class WidgetUpdateWorker extends Worker {
     private static Snapshot fetchOpenMeteo(double lat, double lon) throws Exception {
         String url = String.format(Locale.US,
             "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&timezone=auto&forecast_days=1"
-                + "&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min"
+                + "&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m,wind_direction_10m&daily=temperature_2m_max,temperature_2m_min"
                 + "&hourly=temperature_2m,precipitation_probability&forecast_hours=12", lat, lon);
         JSONObject d = get(url);
         Snapshot s = new Snapshot();
@@ -294,6 +306,9 @@ public class WidgetUpdateWorker extends Worker {
         JSONObject c = d.getJSONObject("current");
         s.tempC = c.getDouble("temperature_2m");
         s.desc = wmo(c.optInt("weather_code", -1));
+        if (!c.isNull("relative_humidity_2m")) s.humidity = c.optDouble("relative_humidity_2m");
+        if (!c.isNull("wind_speed_10m")) s.windKmh = c.optDouble("wind_speed_10m");
+        if (!c.isNull("wind_direction_10m")) s.windDir = compass(c.optDouble("wind_direction_10m"));
         JSONObject daily = d.getJSONObject("daily");
         s.hiC = daily.getJSONArray("temperature_2m_max").getDouble(0);
         s.loC = daily.getJSONArray("temperature_2m_min").getDouble(0);
@@ -383,10 +398,15 @@ public class WidgetUpdateWorker extends Worker {
 
             // Air quality and UV, with a colored dot for the level (same colors as the app)
             SpannableStringBuilder air = new SpannableStringBuilder();
+            if (s.windKmh != null) {
+                long w = Math.round(useC ? s.windKmh : s.windKmh / 1.609344);
+                air.append("💨 ").append(w < 1 ? "Calm" : (s.windDir != null && !s.windDir.isEmpty() ? s.windDir + " " : "") + w + (useC ? " km/h" : " mph")).append("  ");
+            }
+            if (s.humidity != null) air.append("💧 ").append(String.valueOf(Math.round(s.humidity))).append("%  ");
             if (s.aqi >= 0) { dot(air, aqiColor(s.aqi)); air.append("AQI ").append(String.valueOf(s.aqi)); }
             if (!Double.isNaN(s.uv)) {
                 long uv = Math.round(s.uv);
-                if (air.length() > 0) air.append("   ");
+                if (s.aqi >= 0) air.append("  ");
                 dot(air, uvColor(uv)); air.append("UV ").append(String.valueOf(uv));
             }
             v.setTextViewText(R.id.w_air, air);
@@ -433,6 +453,8 @@ public class WidgetUpdateWorker extends Worker {
     static class Snapshot {
         String place, desc, station, source;
         Double tempC, hiC, loC;
+        Double windKmh, humidity;
+        String windDir;
         int aqi = -1;
         double uv = Double.NaN;
         long time;
@@ -448,6 +470,9 @@ public class WidgetUpdateWorker extends Worker {
                 if (loC != null) o.put("loC", loC);
                 o.put("time", time);
                 o.put("aqi", aqi);
+                if (windKmh != null) o.put("windKmh", windKmh);
+                if (humidity != null) o.put("humidity", humidity);
+                o.put("windDir", windDir);
                 if (!Double.isNaN(uv)) o.put("uv", uv);
                 o.put("lat", lat); o.put("lon", lon); o.put("hours", hours);
                 ctx.getSharedPreferences(CACHE, Context.MODE_PRIVATE).edit().putString("snapshot", o.toString()).apply();
@@ -469,6 +494,9 @@ public class WidgetUpdateWorker extends Worker {
                 s.loC = o.has("loC") ? o.getDouble("loC") : null;
                 s.time = o.optLong("time");
                 s.aqi = o.optInt("aqi", -1);
+                s.windKmh = o.has("windKmh") ? o.getDouble("windKmh") : null;
+                s.humidity = o.has("humidity") ? o.getDouble("humidity") : null;
+                s.windDir = o.isNull("windDir") ? null : o.optString("windDir", null);
                 s.uv = o.optDouble("uv", Double.NaN);
                 s.lat = o.optDouble("lat", 0); s.lon = o.optDouble("lon", 0);
                 JSONArray hs = o.optJSONArray("hours");
