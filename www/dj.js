@@ -106,11 +106,29 @@ function djStyles() {
   return out;
 }
 
+// The sky and part of day right now, from the forecast on screen.
+function moodNow() {
+  const part = partOf(new Date().getHours());
+  const sky = skyOf((lastData?.hourly || []).slice(0, 2).length ? lastData.hourly.slice(0, 2) : [{ desc: lastData?.current?.desc || "" }]);
+  return { sky, part };
+}
+
+// While nothing is playing, keep the ready-to-play pick in step with the weather and time of day
+// (the background switcher only acts while the DJ's playlist is playing).
+async function djRefreshPick(dj) {
+  if (!lastData) return dj;
+  const { sky, part } = moodNow();
+  if (dj.sky === sky && dj.part === part) return dj;
+  const styles = djStyles();
+  const pl = await findPlaylist(styles[sky][part], dj.context).catch(() => null);
+  if (!pl) return dj;
+  return djSave({ styles, sky, part, mood: `${sky}/${part}`, context: pl.uri, playlistName: pl.name, pending: null, next: null });
+}
+
 async function djStart() {
   djMsg = "Starting…"; renderDJ();
   try {
-    const now = new Date(), part = partOf(now.getHours());
-    const sky = skyOf((lastData?.hourly || []).slice(0, 2).length ? lastData.hourly.slice(0, 2) : [{ desc: lastData?.current?.desc || "" }]);
+    const { sky, part } = moodNow();
     const styles = djStyles();
     const pl = await findPlaylist(styles[sky][part]);
     if (!pl) throw new Error("Couldn't find a playlist for this weather. Try again in a moment.");
@@ -162,7 +180,7 @@ const SKY_WORD = { storm: "stormy", rain: "rainy", snow: "snowy", fog: "foggy", 
 async function renderDJ() {
   const el = $("dj");
   if (!el) return;
-  const dj = await djLoad();
+  let dj = await djLoad();
   let body;
   if (!dj.clientId) {
     body = `<p>Got Spotify Premium? The Weather DJ plays a playlist that fits the weather, and when the sky changes it switches after the current song ends.</p>
@@ -176,7 +194,8 @@ async function renderDJ() {
       <div class="dj-row"><button type="button" class="dj-go" id="djStart">Start Weather DJ</button><button type="button" id="djForget">Disconnect</button></div>`;
   } else {
     const p = await spotify("GET", "/me/player").catch(() => null);
-    const playing = !!(p && p.is_playing && p.context?.uri === dj.context);
+    let playing = !!(p && p.is_playing && p.context?.uri === dj.context);
+    if (!playing) dj = await djRefreshPick(dj);
     const id = (dj.context || "").split(":").pop();
     body = `<p><b>On.</b> ${playing ? "Playing" : "Ready to play"} <b>${esc(dj.playlistName || "a weather playlist")}</b> for a ${esc(SKY_WORD[dj.sky] || "")} ${esc(dj.part || "")}.${playing && p.item ? ` Now: ${esc(p.item.name)} · ${esc((p.item.artists || []).map((a) => a.name).join(", "))}.` : ""} Checks the sky about every 15 minutes.</p>
       <div class="dj-row">${playing ? `<button type="button" class="dj-go dj-pp" id="djPause">${DJ_ICON.pause}Pause</button>` : `<button type="button" class="dj-go dj-pp" id="djPlay">${DJ_ICON.play}Play</button>`}<button type="button" id="djStart">New playlist</button><button type="button" id="djStop">Turn off</button></div>

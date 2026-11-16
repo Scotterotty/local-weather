@@ -111,7 +111,6 @@ public class SpotifyDjWorker extends Worker {
 
     private static void check(Context ctx, JSONObject dj) throws Exception {
         JSONObject p = ourPlayback(ctx, dj);
-        if (p == null) return;
         double[] loc = WidgetUpdateWorker.location(ctx);
         if (loc == null) return;
 
@@ -120,6 +119,24 @@ public class SpotifyDjWorker extends Worker {
         String mood = sky + "/" + part;
         String oldMood = dj.optString("mood", "");
         if (mood.equals(oldMood)) { dj.remove("pending"); save(ctx, dj); return; }
+
+        if (p == null) {
+            // Nothing of ours is playing: just keep the ready-to-play pick current, so Play starts the right music.
+            JSONObject styles = dj.optJSONObject("styles");
+            JSONObject bySky = styles == null ? null : styles.optJSONObject(sky);
+            String query = bySky == null ? null : bySky.optString(part, null);
+            JSONObject pl = query == null ? null : findPlaylist(ctx, dj, query, dj.optString("context"));
+            if (pl == null) return;
+            dj.put("context", pl.getString("uri"));
+            dj.put("playlistName", pl.optString("name"));
+            dj.put("sky", sky);
+            dj.put("part", part);
+            dj.put("mood", mood);
+            dj.remove("pending");
+            dj.remove("next");
+            save(ctx, dj);
+            return;
+        }
 
         // Rain, snow or storms starting or stopping switches right away. A change between sunny, partly cloudy and
         // cloudy has to show up on two checks in a row, so one passing cloud doesn't change the music.
