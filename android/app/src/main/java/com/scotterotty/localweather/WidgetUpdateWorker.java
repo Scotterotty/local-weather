@@ -328,7 +328,7 @@ public class WidgetUpdateWorker extends Worker {
 
         RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.widget_weather);
         if (s == null) {
-            v.setTextViewText(R.id.w_place, "Local Weather");
+            v.setTextViewText(R.id.w_place, "Sunnyloha");
             v.setTextViewText(R.id.w_temp, "–");
             v.setTextViewText(R.id.w_desc, message != null ? message : "");
             v.setTextViewText(R.id.w_hilo, "");

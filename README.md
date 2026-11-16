@@ -1,4 +1,4 @@
-# Local Weather
+# Sunnyloha
 
 Weather for exactly where you are. In the US it uses the National Weather Service grid forecast for your 2.5 km square, live readings from the nearest weather station (only if reported in the last 90 minutes), and active NWS alerts. Elsewhere it uses Open-Meteo, which picks the best model for the region. No accounts or API keys.
 

@@ -1,6 +1,6 @@
 {
   "appId": "com.scotterotty.localweather",
-  "appName": "Local Weather",
+  "appName": "Sunnyloha",
   "webDir": "www",
   "android": {
     "allowMixedContent": false

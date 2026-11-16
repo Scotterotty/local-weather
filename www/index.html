@@ -4,7 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0f2a3d">
-<title>Local Weather</title>
+<title>Sunnyloha</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="fonts/fonts.css">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <script src="vendor/leaflet/leaflet.js"></script>
@@ -1043,7 +1046,7 @@ function openLook() {
   const dark = document.documentElement.dataset.theme === "dark";
   const sw = (cols) => `<span class="swatch">${cols.map((c) => `<span style="background:${c}"></span>`).join("")}</span>`;
   const fontOptions = (val, bodyOnly, withSame) => `
-    <option value="weather"${val === "weather" ? " selected" : ""}>Local Weather (default)</option>
+    <option value="weather"${val === "weather" ? " selected" : ""}>Sunnyloha (default)</option>
     ${withSame ? `<option value="body"${val === "body" ? " selected" : ""}>Same as text</option>` : ""}
     ${FONT_GROUPS.map((g) => `<optgroup label="${g}">${FONT_LIST.filter((f) => f.group === g && (!bodyOnly || f.text)).map((f) => `<option value="${f.id}"${val === f.id ? " selected" : ""}>${f.label}</option>`).join("")}</optgroup>`).join("")}`;
   const prev = (id, sample) => { const f = id === "body" ? fontById(look.body) : fontById(id); return `<div class="font-prev" style="font-family:${f ? fam(f).replace(/"/g, "&quot;") : "var(--body)"}">${sample}</div>`; };
@@ -1056,7 +1059,7 @@ function openLook() {
       ${[["light", "Light"], ["dark", "Dark"], ["system", "Match my phone"]].map(([id, l]) => chip(`data-look-mode="${id}"`, l, look.mode === id, true)).join("")}
     </div></section>
     <section class="look-sec"${styleOf().mode ? ' hidden' : ""}><h4>Colors</h4>
-      <div class="chips">${chip('data-look-color="weather"', `<span class="dot" style="background:${dark ? "#6db7ea" : "#1d6fa5"}"></span>Local Weather`, look.color === "weather")}
+      <div class="chips">${chip('data-look-color="weather"', `<span class="dot" style="background:${dark ? "#6db7ea" : "#1d6fa5"}"></span>Sunnyloha`, look.color === "weather")}
       ${ACCENT_HUES.map((a) => chip(`data-look-color="${a.id}"`, `<span class="dot" style="background:oklch(.51 .2 ${a.hue})"></span>${a.label}`, look.color === a.id)).join("")}</div>
       <p class="sub-h">Two colors: one for the page, one for the panels</p>
       <div class="chips">${Object.entries(MULTI).filter(([, m]) => m.colors === 2).map(([id, m]) => chip(`data-look-color="${id}" title="${m.sub}"`, `${sw([m[dark ? "dark" : "light"].bg, m[dark ? "dark" : "light"].surface])}${m.label}`, look.color === id)).join("")}</div>
@@ -1177,7 +1180,7 @@ function render() {
 }
 
 function renderError(msg, offerSearch = true) {
-  $("place").textContent = "Local Weather";
+  $("place").textContent = "Sunnyloha";
   $("placeSub").textContent = "";
   $("app").innerHTML = `<div class="panel state">
     <p class="err">${esc(msg)}</p>
@@ -1285,7 +1288,7 @@ function onLocateError(err) {
   if (saved && !lastData) { setLocation(saved); return; }
   const denied = err?.code === 1 || /denied|permission/i.test(err?.message || "");
   renderError(denied
-    ? (nativeGeo ? "Location access is off for Local Weather. Turn it on in your phone's Settings, or search for a place below." : "Location access is turned off for this page.")
+    ? (nativeGeo ? "Location access is off for Sunnyloha. Turn it on in your phone's Settings, or search for a place below." : "Location access is turned off for this page.")
     : "Couldn't get your location right now.");
 }
 

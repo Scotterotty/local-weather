@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Local Weather</string>
-    <string name="title_activity_main">Local Weather</string>
+    <string name="app_name">Sunnyloha</string>
+    <string name="title_activity_main">Sunnyloha</string>
     <string name="package_name">com.scotterotty.localweather</string>
     <string name="custom_url_scheme">com.scotterotty.localweather</string>
     <string name="widget_description">Current weather, the next 5 hours, sunrise, sunset and moon phase where you are</string>
