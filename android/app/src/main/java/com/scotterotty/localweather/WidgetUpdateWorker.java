@@ -121,7 +121,7 @@ public class WidgetUpdateWorker extends Worker {
     }
 
     // Prefer the phone's freshest cached fix; fall back to the last location the app used.
-    private static double[] location(Context ctx) {
+    static double[] location(Context ctx) {
         Location best = null;
         boolean fine = ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         boolean coarse = ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
@@ -319,7 +319,7 @@ public class WidgetUpdateWorker extends Worker {
         return 12742 * Math.asin(Math.sqrt(h));
     }
 
-    private static String wmo(int code) {
+    static String wmo(int code) {
         if (code == 0) return "Clear";
         if (code == 1) return "Mostly clear";
         if (code == 2) return "Partly cloudy";

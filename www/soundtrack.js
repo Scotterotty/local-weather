@@ -100,6 +100,15 @@ function dayParts(hourly) {
   });
 }
 
+// The Spotify playlist search for a sky + part of day, e.g. "rainy day Late-night jazz".
+// The Weather DJ (dj.js + the Android background worker) uses the same queries.
+const SKY_MOOD = { storm: "stormy", rain: "rainy day", snow: "snowy day", fog: "foggy", cloudy: "cloudy day", partly: "", clear: "sunny" };
+function moodQuery(sky, part, style) {
+  const night = part === "night" || part === "evening";
+  const mood = sky === "clear" && night ? "" : SKY_MOOD[sky];
+  return `${mood} ${style.replace(/ and /, " ").replace(/ \(.*\)/, "")}`.trim();
+}
+
 function soundtrackHtml(d) {
   if (!d?.hourly?.length) return "";
   const parts = dayParts(d.hourly);
@@ -113,9 +122,8 @@ function soundtrackHtml(d) {
     const night = g.part === "night" || g.part === "evening";
     const skyWord = { storm: "Storms", rain: "Rain", snow: "Snow", fog: "Fog", cloudy: "Cloudy", partly: night ? "Some clouds" : "Partly sunny", clear: night ? "Clear" : "Sunny" }[sky];
     const weather = `${skyWord}${pop >= 30 && sky !== "clear" ? ` (${Math.round(pop)}%)` : ""}, around ${t(avgC)}`;
-    // Spotify's playlist search for the style plus the mood (e.g. "rainy day late-night jazz"). Opens the Spotify app on Android.
-    const mood = { storm: "stormy", rain: "rainy day", snow: "snowy day", fog: "foggy", cloudy: "cloudy day", partly: "", clear: night ? "" : "sunny" }[sky];
-    const q = encodeURIComponent(`${mood} ${style.replace(/ and /, " ").replace(/ \(.*\)/, "")}`.trim());
+    // Spotify's playlist search for the style plus the mood. Opens the Spotify app on Android.
+    const q = encodeURIComponent(moodQuery(sky, g.part, style));
     return `<div class="track">
       <div class="track-when"><b>${esc(g.name)}</b><span>${esc(weather)}</span></div>
       <div class="track-style">${esc(style)}</div>
@@ -129,6 +137,7 @@ function soundtrackHtml(d) {
       <summary><h2 class="label">Soundtrack for your day</h2></summary>
       <p class="hint">Music picked to match the weather ahead.</p>
       <div class="tracks">${rows}</div>
+      <div id="djSlot"></div>
     </details>
   </section>`;
 }
@@ -139,4 +148,5 @@ function mountSoundtrack() {
   const html = soundtrackHtml(lastData);
   if (!html) { slot.remove(); return; }
   slot.outerHTML = html;
+  if (typeof mountDJ === "function") mountDJ();
 }
