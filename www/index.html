@@ -87,6 +87,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .dj .dj-pp svg { width: .8em; height: .8em; flex: none; }
 .dj-msg { font-size: .85rem; color: var(--warm); }
 .dj code { font-size: .8rem; word-break: break-all; }
+.word-term { font: 600 1.6rem/1.15 var(--display); color: var(--accent); margin-top: 2px; }
+.word-aka { font-size: .85rem; color: var(--muted); margin-top: 2px; }
+.word p { margin: 10px 0; max-width: 65ch; }
+.word-why { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border-radius: 12px; padding: 10px 14px; margin: 10px 0; }
+.word-why .k { font: 600 .68rem var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+.word-more { display: flex; gap: 8px; flex-wrap: wrap; }
 .aqi-dot { display: inline-block; width: .7em; height: .7em; border-radius: 50%; margin-right: 6px; vertical-align: .05em; box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 20%, transparent); }
 .stat .v { font-size-adjust: var(--display-adjust, none); }
 .now .big { font: 500 5rem/1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
@@ -1271,10 +1277,12 @@ function render() {
       </div>`).join("")}</div>
   </section>
 
+  <div id="wordSlot"></div>
   <div id="soundtrackSlot"></div>
   <div id="almanacSlot"></div>`;
 
   mountRadar();
+  if (typeof mountWord === "function") mountWord();
   if (typeof mountSoundtrack === "function") mountSoundtrack();
   if (typeof mountAlmanac === "function") mountAlmanac();
   $("footer").innerHTML = `${termBtn("all", "What do all these words mean?")}<br><br>${BUILD.startsWith("__") ? "Built-in copy" : `App version ${BUILD}`}<br>Source: <a href="${d.sourceLink}" target="_blank" rel="noopener">${esc(d.source)}</a> · ${esc(d.sourceNote)}${d.fallbackReason ? ` · ${esc(d.fallbackReason)}` : ""}`;
@@ -1440,6 +1448,7 @@ reviveCache();
 locate();
 </script>
 <script src="almanac.js"></script>
+<script src="wordofday.js"></script>
 <script src="soundtrack.js"></script>
 <script src="dj.js"></script>
 </body>
