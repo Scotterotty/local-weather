@@ -153,6 +153,11 @@ async function djStop() { await djSave({ on: false, next: null }); djMsg = "Weat
 async function djForget() { const p = djPrefs(); await p.remove({ key: "lw.dj" }); djMsg = ""; renderDJ(); }
 
 // ---------- UI (inside the Soundtrack panel) ----------
+// Same-size drawn icons (the ▶ and ❚❚ characters render at very different sizes on Android).
+const DJ_ICON = {
+  play: `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 1.2v9.6L10.5 6z" fill="currentColor"/></svg>`,
+  pause: `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.2 1.5h2.8v9H2.2zM7 1.5h2.8v9H7z" fill="currentColor"/></svg>`
+};
 const SKY_WORD = { storm: "stormy", rain: "rainy", snow: "snowy", fog: "foggy", cloudy: "cloudy", partly: "partly cloudy", clear: "clear" };
 async function renderDJ() {
   const el = $("dj");
@@ -174,7 +179,7 @@ async function renderDJ() {
     const playing = !!(p && p.is_playing && p.context?.uri === dj.context);
     const id = (dj.context || "").split(":").pop();
     body = `<p><b>On.</b> ${playing ? "Playing" : "Ready to play"} <b>${esc(dj.playlistName || "a weather playlist")}</b> for a ${esc(SKY_WORD[dj.sky] || "")} ${esc(dj.part || "")}.${playing && p.item ? ` Now: ${esc(p.item.name)} · ${esc((p.item.artists || []).map((a) => a.name).join(", "))}.` : ""} Checks the sky about every 15 minutes.</p>
-      <div class="dj-row">${playing ? `<button type="button" class="dj-go" id="djPause">❚❚ Pause</button>` : `<button type="button" class="dj-go" id="djPlay">▶ Play</button>`}<button type="button" id="djStart">New playlist</button><button type="button" id="djStop">Turn off</button></div>
+      <div class="dj-row">${playing ? `<button type="button" class="dj-go dj-pp" id="djPause">${DJ_ICON.pause}Pause</button>` : `<button type="button" class="dj-go dj-pp" id="djPlay">${DJ_ICON.play}Play</button>`}<button type="button" id="djStart">New playlist</button><button type="button" id="djStop">Turn off</button></div>
       ${id ? `<p class="hint"><a href="https://open.spotify.com/playlist/${esc(id)}" target="_blank" rel="noopener">Open this playlist in Spotify</a> to follow or save it.</p>` : ""}`;
   }
   el.innerHTML = `<h3>Weather DJ</h3>${body}${djMsg ? `<p class="dj-msg">${esc(djMsg)}</p>` : ""}`;
