@@ -8,25 +8,49 @@ const PARTS = [   // [first hour, last hour, name]
 const partOf = (h) => PARTS.find(([a, b]) => a <= b ? h >= a && h <= b : h >= a || h <= b)[2];
 
 // The sky for a stretch of hours, in one word. Wet or wild weather wins over the most common sky.
+function skyKind(desc) {
+  const s = (desc || "").toLowerCase();
+  if (/thunder|t-storm/.test(s)) return "storm";
+  if (/snow|sleet|flurr|ice|freezing/.test(s)) return "snow";
+  if (/rain|shower|drizzle/.test(s)) return "rain";
+  if (/fog|haze|smoke|mist/.test(s)) return "fog";
+  if (/overcast|^cloudy|mostly cloudy/.test(s)) return "cloudy";
+  if (/partly|few clouds/.test(s)) return "partly";
+  return "clear";
+}
+const WET = ["storm", "rain", "snow"];
+
+// An hour only counts as stormy/rainy/snowy when it's more likely than not (50%+). "Chance of storms, 35%"
+// usually means a mostly dry hour, so it counts as partly cloudy instead (and shows up as "possible" in the text).
+function hourSky(h) {
+  const k = skyKind(h.desc);
+  return WET.includes(k) && (h.pop ?? 100) < 50 ? "partly" : k;
+}
+
 function skyOf(hours) {
-  const k = (h) => {
-    const s = (h.desc || "").toLowerCase();
-    if (/thunder|t-storm/.test(s)) return "storm";
-    if (/snow|sleet|flurr|ice|freezing/.test(s)) return "snow";
-    if (/rain|shower|drizzle/.test(s)) return "rain";
-    if (/fog|haze|smoke|mist/.test(s)) return "fog";
-    if (/overcast|^cloudy|mostly cloudy/.test(s)) return "cloudy";
-    if (/partly|few clouds/.test(s)) return "partly";
-    return "clear";
-  };
-  const kinds = hours.map(k), share = (x) => kinds.filter((y) => y === x).length / kinds.length;
-  const maxPop = Math.max(0, ...hours.map((h) => h.pop || 0));
-  if (kinds.includes("storm")) return "storm";
+  const kinds = hours.map(hourSky), share = (x) => kinds.filter((y) => y === x).length / kinds.length;
+  if (share("storm") >= 0.25) return "storm";
   if (share("snow") >= 0.3) return "snow";
-  if (share("rain") >= 0.3 || maxPop >= 55) return "rain";
+  if (share("rain") + share("storm") >= 0.3) return "rain";
   if (share("fog") >= 0.5) return "fog";
   const counts = ["cloudy", "partly", "clear"].map((x) => [x, share(x)]).sort((a, b) => b[1] - a[1]);
   return counts[0][0];
+}
+
+// Right now, what you see out the window wins: the latest observation, unless rain/storms are likely within the hour.
+function skyNowFrom(d) {
+  const obs = skyKind(d?.current?.desc);
+  const soon = (d?.hourly || []).slice(0, 1).map(hourSky)[0];
+  return WET.includes(soon) && !WET.includes(obs) ? soon : obs;
+}
+
+// Wet weather that's possible but not likely in this stretch, e.g. "storms possible (35%)".
+function possibleNote(hours, sky) {
+  if (WET.includes(sky)) return "";
+  const wet = hours.filter((h) => WET.includes(skyKind(h.desc)) && (h.pop || 0) >= 20);
+  if (!wet.length) return "";
+  const k = wet.some((h) => skyKind(h.desc) === "storm") ? "storms" : wet.some((h) => skyKind(h.desc) === "snow") ? "snow" : "showers";
+  return ` · ${k} possible (${Math.max(...wet.map((h) => h.pop || 0))}%)`;
 }
 
 // Style, a few artists to start with, and why it fits. Keyed by sky, then part of day ("any" = all parts).
@@ -114,14 +138,15 @@ function soundtrackHtml(d) {
   const parts = dayParts(d.hourly);
   if (!parts.length) return "";
   const rows = parts.map((g) => {
-    const sky = skyOf(g.hours);
+    // The part of the day you're in now follows the current conditions; later parts follow the forecast.
+    const sky = g === parts[0] && g.hours[0].time - Date.now() < 3600e3 ? skyNowFrom(d) : skyOf(g.hours);
     const temps = g.hours.map((h) => h.tempC).filter((x) => x != null);
     const avgC = temps.length ? temps.reduce((a, x) => a + x, 0) / temps.length : 15;
     const pop = Math.max(0, ...g.hours.map((h) => h.pop || 0));
     const [style, artists, why] = pickSoundtrack(sky, g.part, avgC);
     const night = g.part === "night" || g.part === "evening";
     const skyWord = { storm: "Storms", rain: "Rain", snow: "Snow", fog: "Fog", cloudy: "Cloudy", partly: night ? "Some clouds" : "Partly sunny", clear: night ? "Clear" : "Sunny" }[sky];
-    const weather = `${skyWord}${pop >= 30 && sky !== "clear" ? ` (${Math.round(pop)}%)` : ""}, around ${t(avgC)}`;
+    const weather = `${skyWord}${WET.includes(sky) && pop >= 30 ? ` (${Math.round(pop)}%)` : ""}, around ${t(avgC)}${possibleNote(g.hours, sky)}`;
     // Spotify's playlist search for the style plus the mood. Opens the Spotify app on Android.
     const q = encodeURIComponent(moodQuery(sky, g.part, style));
     return `<div class="track">

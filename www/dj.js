@@ -109,7 +109,7 @@ function djStyles() {
 // The sky and part of day right now, from the forecast on screen.
 function moodNow() {
   const part = partOf(new Date().getHours());
-  const sky = skyOf((lastData?.hourly || []).slice(0, 2).length ? lastData.hourly.slice(0, 2) : [{ desc: lastData?.current?.desc || "" }]);
+  const sky = skyKind(lastData?.current?.desc);   // what's observed right now, never forecast chances
   return { sky, part };
 }
 
@@ -118,7 +118,7 @@ function moodNow() {
 async function djRefreshPick(dj) {
   if (!lastData) return dj;
   const { sky, part } = moodNow();
-  if (dj.sky === sky && dj.part === part) return dj;
+  if (dj.sky === sky) return dj;   // only a change in the current conditions changes the music
   const styles = djStyles();
   const pl = await findPlaylist(styles[sky][part], dj.context).catch(() => null);
   if (!pl) return dj;
@@ -176,6 +176,7 @@ const DJ_ICON = {
   play: `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 1.2v9.6L10.5 6z" fill="currentColor"/></svg>`,
   pause: `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.2 1.5h2.8v9H2.2zM7 1.5h2.8v9H7z" fill="currentColor"/></svg>`
 };
+const SKY_NOW = { storm: "the storm", rain: "the rain", snow: "the snow", fog: "the fog", cloudy: "cloudy skies", partly: "partly cloudy skies", clear: "clear skies" };
 const SKY_WORD = { storm: "stormy", rain: "rainy", snow: "snowy", fog: "foggy", cloudy: "cloudy", partly: "partly cloudy", clear: "clear" };
 async function renderDJ() {
   const el = $("dj");
@@ -197,7 +198,7 @@ async function renderDJ() {
     let playing = !!(p && p.is_playing && p.context?.uri === dj.context);
     if (!playing) dj = await djRefreshPick(dj);
     const id = (dj.context || "").split(":").pop();
-    body = `<p><b>On.</b> ${playing ? "Playing" : "Ready to play"} <b>${esc(dj.playlistName || "a weather playlist")}</b> for a ${esc(SKY_WORD[dj.sky] || "")} ${esc(dj.part || "")}.${playing && p.item ? ` Now: ${esc(p.item.name)} · ${esc((p.item.artists || []).map((a) => a.name).join(", "))}.` : ""} Checks the sky about every 15 minutes.</p>
+    body = `<p><b>On.</b> ${playing ? "Playing" : "Ready to play"} <b>${esc(dj.playlistName || "a weather playlist")}</b> for ${esc(SKY_NOW[dj.sky] || "the weather right now")}.${playing && p.item ? ` Now: ${esc(p.item.name)} · ${esc((p.item.artists || []).map((a) => a.name).join(", "))}.` : ""} Changes only when the conditions outside change (checked about every 15 minutes).</p>
       <div class="dj-row">${playing ? `<button type="button" class="dj-go dj-pp" id="djPause">${DJ_ICON.pause}Pause</button>` : `<button type="button" class="dj-go dj-pp" id="djPlay">${DJ_ICON.play}Play</button>`}<button type="button" id="djStart">New playlist</button><button type="button" id="djStop">Turn off</button></div>
       ${id ? `<p class="hint"><a href="https://open.spotify.com/playlist/${esc(id)}" target="_blank" rel="noopener">Open this playlist in Spotify</a> to follow or save it.</p>` : ""}`;
   }

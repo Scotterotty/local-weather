@@ -114,11 +114,12 @@ public class SpotifyDjWorker extends Worker {
         double[] loc = WidgetUpdateWorker.location(ctx);
         if (loc == null) return;
 
-        String sky = skyNow(loc[0], loc[1]);
+        String sky = skyNow(ctx, loc[0], loc[1]);
         String part = partOfDay(Calendar.getInstance().get(Calendar.HOUR_OF_DAY));
         String mood = sky + "/" + part;
         String oldMood = dj.optString("mood", "");
-        if (mood.equals(oldMood)) { dj.remove("pending"); save(ctx, dj); return; }
+        // Only a change in the current conditions changes the music (not the time of day, not forecast chances).
+        if (sky.equals(dj.optString("sky"))) { dj.remove("pending"); save(ctx, dj); return; }
 
         if (p == null) {
             // Nothing of ours is playing: just keep the ready-to-play pick current, so Play starts the right music.
@@ -198,7 +199,17 @@ public class SpotifyDjWorker extends Worker {
     }
 
     /** The sky right now (Open-Meteo's current conditions, updated every 15 minutes), in the app's words. */
-    private static String skyNow(double lat, double lon) throws Exception {
+    private static String skyNow(Context ctx, double lat, double lon) throws Exception {
+        // Prefer the widget's latest real station reading (same one the app shows) when it's fresh.
+        WidgetUpdateWorker.Snapshot snap = WidgetUpdateWorker.Snapshot.load(ctx);
+        if (snap != null && snap.desc != null && !snap.desc.isEmpty() && System.currentTimeMillis() - snap.time < 45 * 60 * 1000L) {
+            String k = WidgetUpdateWorker.kind(snap.desc);
+            return "mostly".equals(k) ? "clear" : k;
+        }
+        return skyModel(lat, lon);
+    }
+
+    private static String skyModel(double lat, double lon) throws Exception {
         JSONObject c = new JSONObject(http("GET", String.format(Locale.US,
             "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=weather_code,precipitation", lat, lon), null, null).body)
             .getJSONObject("current");
