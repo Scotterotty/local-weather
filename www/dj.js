@@ -124,6 +124,31 @@ async function djStart() {
   } catch (e) { djMsg = e.message; }
   renderDJ();
 }
+// Play (or resume) the DJ's current playlist without picking a new one; Pause pauses Spotify.
+async function pickDevice() {
+  const devs = (await spotify("GET", "/me/player/devices"))?.devices || [];
+  const dev = devs.find((d) => d.is_active) || devs.find((d) => d.type === "Smartphone") || devs[0];
+  if (!dev) throw new Error("Open the Spotify app first (it just needs to be open), then tap Play again.");
+  return dev;
+}
+async function djPlay() {
+  try {
+    const dj = await djLoad(), p = await spotify("GET", "/me/player").catch(() => null);
+    if (p && p.context?.uri === dj.context && !p.is_playing) await spotify("PUT", "/me/player/play");   // resume where it was
+    else if (!(p && p.context?.uri === dj.context && p.is_playing)) {
+      const dev = await pickDevice();
+      await spotify("PUT", `/me/player/play?device_id=${encodeURIComponent(dev.id)}`, { context_uri: dj.context });
+      spotify("PUT", `/me/player/shuffle?state=true&device_id=${encodeURIComponent(dev.id)}`).catch(() => {});
+    }
+    djMsg = "";
+  } catch (e) { djMsg = e.message; }
+  setTimeout(renderDJ, 600);   // give Spotify a moment before reading the new state
+}
+async function djPause() {
+  try { await spotify("PUT", "/me/player/pause"); djMsg = ""; } catch (e) { djMsg = e.message; }
+  setTimeout(renderDJ, 600);
+}
+
 async function djStop() { await djSave({ on: false, next: null }); djMsg = "Weather DJ is off. Your music keeps playing."; renderDJ(); }
 async function djForget() { const p = djPrefs(); await p.remove({ key: "lw.dj" }); djMsg = ""; renderDJ(); }
 
@@ -145,14 +170,20 @@ async function renderDJ() {
     body = `<p>Plays a playlist for the weather right now on your phone's Spotify, and switches it when the sky changes (after the song that's playing ends).</p>
       <div class="dj-row"><button type="button" class="dj-go" id="djStart">Start Weather DJ</button><button type="button" id="djForget">Disconnect</button></div>`;
   } else {
-    body = `<p><b>On.</b> Playing <b>${esc(dj.playlistName || "a weather playlist")}</b> for a ${esc(SKY_WORD[dj.sky] || "")} ${esc(dj.part || "")}. Checks the sky about every 15 minutes.</p>
-      <div class="dj-row"><button type="button" class="dj-go" id="djStart">Pick a new playlist</button><button type="button" id="djStop">Turn off</button></div>`;
+    const p = await spotify("GET", "/me/player").catch(() => null);
+    const playing = !!(p && p.is_playing && p.context?.uri === dj.context);
+    const id = (dj.context || "").split(":").pop();
+    body = `<p><b>On.</b> ${playing ? "Playing" : "Ready to play"} <b>${esc(dj.playlistName || "a weather playlist")}</b> for a ${esc(SKY_WORD[dj.sky] || "")} ${esc(dj.part || "")}.${playing && p.item ? ` Now: ${esc(p.item.name)} · ${esc((p.item.artists || []).map((a) => a.name).join(", "))}.` : ""} Checks the sky about every 15 minutes.</p>
+      <div class="dj-row">${playing ? `<button type="button" class="dj-go" id="djPause">❚❚ Pause</button>` : `<button type="button" class="dj-go" id="djPlay">▶ Play</button>`}<button type="button" id="djStart">New playlist</button><button type="button" id="djStop">Turn off</button></div>
+      ${id ? `<p class="hint"><a href="https://open.spotify.com/playlist/${esc(id)}" target="_blank" rel="noopener">Open this playlist in Spotify</a> to follow or save it.</p>` : ""}`;
   }
   el.innerHTML = `<h3>Weather DJ</h3>${body}${djMsg ? `<p class="dj-msg">${esc(djMsg)}</p>` : ""}`;
   $("djIdForm")?.addEventListener("submit", async (e) => { e.preventDefault(); const v = $("djId").value.trim(); if (!/^[0-9a-f]{32}$/i.test(v)) { djMsg = "That doesn't look like a Client ID (32 letters and numbers)."; return renderDJ(); } djMsg = ""; await djSave({ clientId: v }); renderDJ(); });
   $("djConnect")?.addEventListener("click", djConnect);
   $("djStart")?.addEventListener("click", djStart);
   $("djStop")?.addEventListener("click", djStop);
+  $("djPlay")?.addEventListener("click", djPlay);
+  $("djPause")?.addEventListener("click", djPause);
   $("djForget")?.addEventListener("click", djForget);
 }
 
