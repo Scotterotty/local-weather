@@ -161,6 +161,16 @@ footer .term { font-size: .8rem; }
 .bird .bn { font-weight: 600; font-size: .85rem; line-height: 1.25; }
 .bird .bc { font-size: .72rem; color: var(--muted); }
 .lore { margin-bottom: 10px; }
+.stars { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.star-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.star-card p { margin: 4px 0 0; font-size: .88rem; }
+.star-card .fact { color: var(--muted); font-size: .8rem; }
+.sc-top { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.sc-top .where { font-size: .78rem; color: var(--accent); font-weight: 600; }
+.rate { display: inline-block; font: 600 .75rem var(--body); letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; margin-right: 4px; }
+.rate-good { background: color-mix(in srgb, #00b050 22%, var(--surface)); color: color-mix(in srgb, #00b050 70%, var(--fg)); }
+.rate-fair { background: color-mix(in srgb, #d4b300 25%, var(--surface)); color: color-mix(in srgb, #9a7f00 70%, var(--fg)); }
+.rate-poor { background: color-mix(in srgb, #e8202a 18%, var(--surface)); color: color-mix(in srgb, #e8202a 70%, var(--fg)); }
 .lore .say { font: italic 500 1rem/1.4 var(--display); margin-bottom: 4px; }
 
 /* Radar */

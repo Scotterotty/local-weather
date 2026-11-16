@@ -149,6 +149,72 @@ function folklore(d) {
   return items;
 }
 
+// ---------- stars tonight ----------
+// Constellation centers (J2000 right ascension in hours, declination in degrees), how to find them, and one fact.
+// Positions are worked out on the phone from the time and your location; precession since 2000 is too small to matter here.
+const CONSTELLATIONS = [
+  ["Big Dipper", "Ursa Major", 11.0, 55, "Seven bright stars shaped like a ladle.", "Follow the two stars at the end of the cup upward and they point to the North Star."],
+  ["Little Dipper", "Ursa Minor", 15.0, 75, "A fainter, smaller ladle. The North Star is the end of its handle.", "The North Star barely moves all night, because Earth's axis points almost straight at it."],
+  ["Cassiopeia", "Cassiopeia", 1.0, 60, "Five bright stars in a W or M shape.", "It sits across the North Star from the Big Dipper, so when one is low the other is high."],
+  ["Cepheus", "Cepheus", 22.0, 70, "A faint house shape with a pointed roof, near Cassiopeia.", "It holds Delta Cephei, a star that brightens and dims every 5.4 days and helped astronomers measure the size of the universe."],
+  ["Cygnus, the Northern Cross", "Cygnus", 20.6, 42, "A big cross of stars lying along the Milky Way. The bright top star is Deneb.", "Deneb is about 200 times wider than the Sun and one of the most distant stars you can see without a telescope."],
+  ["Lyra", "Lyra", 18.8, 36, "A small parallelogram hanging from brilliant blue-white Vega.", "Vega is part of the Summer Triangle with Deneb and Altair."],
+  ["Aquila", "Aquila", 19.7, 3, "Bright Altair with a fainter star on each side, like an eagle's wings.", "Altair spins so fast, once every 9 hours, that it's squashed into an egg shape."],
+  ["Pegasus, the Great Square", "Pegasus", 22.7, 20, "Four stars making a huge square, about one and a half fists wide when you hold your arm out.", "Hardly any stars are visible inside the square, which makes it easy to spot."],
+  ["Andromeda", "Andromeda", 0.8, 38, "A curved line of stars running from one corner of the Great Square.", "On a dark night, a fuzzy smudge here is the Andromeda Galaxy: a trillion stars, 2.5 million light-years away. It's the farthest thing you can see with your eyes alone."],
+  ["Perseus", "Perseus", 3.3, 45, "A curving chain of stars between Cassiopeia and the Pleiades.", "Its star Algol dims for a few hours every 2.9 days, when a darker companion star passes in front of it."],
+  ["Pleiades, the Seven Sisters", "Pleiades", 3.8, 24, "A tiny, tight cluster that looks like a mini dipper.", "Most people see six or seven stars, but there are over a thousand. Subaru's logo is the Pleiades."],
+  ["Taurus", "Taurus", 4.7, 16, "A V shape of stars, the bull's face, with orange Aldebaran as its eye.", "Aldebaran is a giant star about 44 times wider than the Sun."],
+  ["Auriga", "Auriga", 6.0, 42, "A big pentagon of stars topped by bright yellow Capella.", "Capella is actually four stars: two yellow giants and two small red dwarfs."],
+  ["Orion", "Orion", 5.6, 3, "Three stars in a straight row make Orion's belt, between orange Betelgeuse and blue-white Rigel.", "Below the belt, a fuzzy patch is the Orion Nebula, a cloud where new stars are being born right now."],
+  ["Gemini", "Gemini", 7.2, 23, "Two parallel lines of stars topped by the twins Castor and Pollux.", "The Geminid meteor shower, one of the best of the year, seems to come from here in mid-December."],
+  ["Canis Major", "Canis Major", 6.8, -20, "Find Sirius, the brightest star in the night sky, by following Orion's belt down to the left.", "Sirius is only 8.6 light-years away, which is one reason it looks so bright."],
+  ["Leo", "Leo", 10.7, 15, "A backward question mark, the lion's mane, ending in bright Regulus.", "The Leonid meteor shower peaks in mid-November and seems to come from Leo's head."],
+  ["Boötes", "Bootes", 14.7, 30, "A kite shape with orange Arcturus at the bottom. Follow the Big Dipper's handle's curve to find it: arc to Arcturus.", "Arcturus is racing past our part of the galaxy at about 76 miles per second."],
+  ["Virgo", "Virgo", 13.4, -4, "A wide Y shape. Keep following the arc past Arcturus to bright Spica.", "Virgo is the largest zodiac constellation."],
+  ["Scorpius", "Scorpius", 16.9, -30, "A curling scorpion low in the south, with red Antares as its heart.", "Antares is so big that if it replaced the Sun, it would swallow Mars."],
+  ["Sagittarius, the Teapot", "Sagittarius", 19.0, -28, "Eight stars shaped like a teapot, with the Milky Way rising like steam from its spout.", "The center of our galaxy lies in this direction, about 26,000 light-years away."],
+  ["Southern Cross", "Crux", 12.4, -60, "A small, bright kite of four stars.", "It appears on the flags of Australia, New Zealand, Brazil and other southern countries."]
+];
+const DIRS = ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"];
+
+function skyPosition(raH, decD, lat, lon, when) {
+  const jd = when.getTime() / 864e5 + 2440587.5;
+  const gmst = (280.46061837 + 360.98564736629 * (jd - 2451545)) % 360;
+  const H = ((gmst + lon - raH * 15) % 360 + 360) % 360 * RAD, d = decD * RAD, f = lat * RAD;
+  const alt = Math.asin(Math.sin(f) * Math.sin(d) + Math.cos(f) * Math.cos(d) * Math.cos(H));
+  const az = Math.atan2(-Math.sin(H), Math.tan(d) * Math.cos(f) - Math.sin(f) * Math.cos(H));
+  return { alt: alt / RAD, az: ((az / RAD) + 360) % 360 };
+}
+function whereToLook(p) {
+  const dir = DIRS[Math.round(p.az / 45) % 8];
+  if (p.alt > 70) return "almost straight overhead";
+  return `${p.alt > 45 ? "high" : p.alt > 25 ? "halfway up" : "low"} in the ${dir}`;
+}
+
+function starsTonight(d) {
+  const now = new Date();
+  const sun = sunTimes(current.lat, current.lon);
+  // Start looking about 90 minutes after sunset, when the sky is fully dark. If it's already later, use now.
+  let when = sun.set ? new Date(sun.set.getTime() + 90 * 6e4) : now;
+  if (now > when && now.getHours() >= 12) when = now;
+  const visible = CONSTELLATIONS.map(([name, id, ra, dec, find, fact]) => ({ name, id, find, fact, pos: skyPosition(ra, dec, current.lat, current.lon, when) }))
+    .filter((c) => c.pos.alt > 20).sort((a, b) => b.pos.alt - a.pos.alt).slice(0, 6);
+  // Viewing conditions: forecast sky near that hour, and how bright the moon will be in the evening.
+  const h = d.hourly.reduce((best, x) => !best || Math.abs(x.time - when) < Math.abs(best.time - when) ? x : best, null);
+  const sky = (h?.desc || "").toLowerCase();
+  const cloud = /rain|shower|storm|snow|fog|drizzle|overcast|^cloudy|mostly cloudy/.test(sky) ? 2 : /partly|haze|smoke/.test(sky) ? 1 : 0;
+  const m = moonPhase();
+  const moonUp = m.waxing ? m.illum > 0.3 : m.illum > 0.9;         // waxing moons are up in the evening; waning ones rise later
+  const moonBright = moonUp && m.illum > 0.6;
+  const rating = cloud === 2 ? "Poor" : cloud === 1 || moonBright ? "Fair" : "Good";
+  const why = [
+    cloud === 2 ? `Clouds will likely block the view (${h.desc.toLowerCase()})` : cloud === 1 ? `Some clouds around (${h.desc.toLowerCase()})` : "Clear skies expected",
+    moonBright ? `a bright ${Math.round(m.illum * 100)}% moon will wash out fainter stars` : moonUp ? `a ${Math.round(m.illum * 100)}% moon is up in the evening, but it's not too bright` : "no moon in the evening sky, so it's nice and dark"
+  ];
+  return { when, visible, rating, why };
+}
+
 // ---------- rendering ----------
 function almanacPanel() {
   if (almanac.el) return almanac.el;
@@ -206,7 +272,16 @@ function renderAlmanac() {
   } else html += `<p class="hint">${b ? "No bird sightings recorded near here for this month yet." : "Loading sightings…"}</p>`;
   html += `</div>`;
 
-  // 5. Folklore
+  // 5. Stars tonight
+  const st = starsTonight(d);
+  html += `<div class="alm-sec"><h3>${termBtn("constellation", "Stars tonight")}</h3>
+    <p><span class="rate rate-${st.rating.toLowerCase()}">${st.rating}</span> for ${termBtn("stargazing", "stargazing")} around ${esc(fmtTime(st.when))}. ${esc(st.why[0])}, and ${esc(st.why[1])}.</p>
+    ${st.visible.length ? `<div class="stars">${st.visible.map((c) => `<div class="star-card">
+      <div class="sc-top"><b>${esc(c.name)}</b><span class="where">${esc(whereToLook(c.pos))}</span></div>
+      <p>${esc(c.find)}</p><p class="fact">${esc(c.fact)}</p></div>`).join("")}</div>` : `<p>No major constellations are well placed right now.</p>`}
+    <p class="hint">Away from streetlights you'll see far more. Give your eyes 15 minutes to adjust, and use red light if you need a flashlight.</p></div>`;
+
+  // 6. Folklore
   html += `<div class="alm-sec"><h3>Sky and weather sayings</h3>${folklore(d).map((f) => `<div class="lore"><p class="say">“${esc(f.say)}”</p><p><b>Science says:</b> ${esc(f.sci)}</p></div>`).join("")}</div>`;
   el.innerHTML = html;
 }
@@ -248,6 +323,16 @@ function currentZone() { return almanac.zone?.zone || (almanac.clim ? zoneFromEx
 
 // Explanations for the almanac's own words
 Object.assign(TERMS, {
+  constellation: {
+    title: "Constellations",
+    what: "Patterns of stars that people have named for thousands of years, often after animals, heroes and myths. The stars in a pattern usually aren't close to each other at all; they just line up from where we stand. As Earth turns, constellations rise in the east and set in the west, like the Sun. As Earth circles the Sun over the year, different ones are up in the evening each season.",
+    now: () => { if (!lastData || !current) return null; const st = starsTonight(lastData); return st.visible.length ? `Tonight around ${fmtTime(st.when)}, the best placed are ${st.visible.slice(0, 3).map((c) => c.name).join(", ")}.` : null; }
+  },
+  stargazing: {
+    title: "Stargazing conditions",
+    what: "Three things decide how many stars you'll see: clouds, the moon and light pollution. Clouds block everything. A bright moon lights up the sky and hides fainter stars, so the best nights are around the new moon. City lights do the same thing, which is why a park or the countryside shows hundreds more stars than a backyard in town. This rating uses the cloud forecast and the moon; it can't know about streetlights near you.",
+    extra: () => scaleList([["Good", "Clear and dark. Great night to look up"], ["Fair", "Some clouds or a bright moon. Bright stars still show"], ["Poor", "Mostly cloudy or rainy"]], -1)
+  },
   normal: {
     title: "Normal weather",
     what: "\"Normal\" is the average over many years, not what you should expect every day. Real days bounce above and below it. This app works out normals for your exact spot from 20 years of daily temperatures, averaging the week on either side of today's date."
@@ -279,6 +364,6 @@ Object.assign(TERMS, {
     what: "A free app where people share photos of plants and animals they find. Experts and other users help identify each photo. The birds listed here are species with photos people agree on, taken near you during this month in past years. Tap a bird to learn more about it."
   }
 });
-["normal", "frost", "zone", "inat"].forEach((k) => { if (typeof TERM_ORDER !== "undefined" && !TERM_ORDER.includes(k)) TERM_ORDER.push(k); });
+["normal", "frost", "zone", "constellation", "stargazing", "inat"].forEach((k) => { if (typeof TERM_ORDER !== "undefined" && !TERM_ORDER.includes(k)) TERM_ORDER.push(k); });
 
 if (lastData) mountAlmanac();
