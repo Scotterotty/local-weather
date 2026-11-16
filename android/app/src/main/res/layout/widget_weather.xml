@@ -21,10 +21,12 @@
         <TextView android:id="@+id/w_temp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:fontFamily="sans-serif-light"
             android:includeFontPadding="false" android:text="–" android:textColor="@color/widget_fg" android:textSize="42sp" />
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:layout_weight="1" android:orientation="vertical">
-            <TextView android:id="@+id/w_desc" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="2"
+            <TextView android:id="@+id/w_desc" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1"
                 android:text="Loading weather…" android:textColor="@color/widget_fg" android:textSize="15sp" android:textStyle="bold" />
             <TextView android:id="@+id/w_hilo" android:layout_width="match_parent" android:layout_height="wrap_content" android:maxLines="1"
                 android:textColor="@color/widget_muted" android:textSize="13sp" />
+            <TextView android:id="@+id/w_air" android:layout_width="match_parent" android:layout_height="wrap_content" android:maxLines="1"
+                android:ellipsize="end" android:textColor="@color/widget_fg" android:textSize="12sp" android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>
 

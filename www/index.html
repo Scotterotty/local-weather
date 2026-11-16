@@ -380,13 +380,36 @@ const AQI_LEVELS = [
   [Infinity, "Hazardous", "#7e0023", "Emergency conditions. Stay indoors."]
 ];
 const aqiLevel = (v) => AQI_LEVELS.find(([max]) => v <= max);
+// UV index (WHO / EPA scale), from the same Open-Meteo request as air quality.
+const UV_LEVELS = [
+  [2, "Low", "#3ea72d", "Little risk. Sunglasses on bright days."],
+  [5, "Moderate", "#d4b300", "Sunscreen and a hat if you're out for a while, especially around midday."],
+  [7, "High", "#f18b00", "Sunscreen, hat and sunglasses. Find shade around midday."],
+  [10, "Very high", "#e53210", "Bare skin can burn in about 15 minutes. Stay in the shade from 10 to 4."],
+  [Infinity, "Extreme", "#b567a4", "Bare skin can burn in under 10 minutes. Avoid the midday sun."]
+];
+const uvLevel = (v) => UV_LEVELS.find(([max]) => Math.round(v) <= max);
+const hourLabel = (iso) => new Date(2000, 0, 1, +iso.slice(11, 13)).toLocaleTimeString(undefined, { hour: "numeric" });
+
 async function loadAQI(lat, lon) {
-  const q = new URLSearchParams({ latitude: lat, longitude: lon, timezone: "auto", current: "us_aqi,pm2_5,ozone", hourly: "us_aqi", forecast_hours: 24 });
+  const q = new URLSearchParams({ latitude: lat, longitude: lon, timezone: "auto", current: "us_aqi,pm2_5,ozone,uv_index", hourly: "us_aqi,uv_index", forecast_hours: 24 });
   const d = await getJSON(`https://air-quality-api.open-meteo.com/v1/air-quality?${q}`);
   const v = d.current?.us_aqi;
-  if (v == null) return null;
-  const peak = Math.max(...(d.hourly?.us_aqi || []).filter((x) => x != null), v);
-  return { value: Math.round(v), peak: Math.round(peak), pm25: d.current.pm2_5, ozone: d.current.ozone };
+  const out = {};
+  if (v != null) {
+    const peak = Math.max(...(d.hourly?.us_aqi || []).filter((x) => x != null), v);
+    Object.assign(out, { value: Math.round(v), peak: Math.round(peak), pm25: d.current.pm2_5, ozone: d.current.ozone });
+  }
+  const u = d.current?.uv_index;
+  if (u != null) {
+    // Highest UV in the next 24 hours, and when. After dark that's tomorrow's midday.
+    const hs = d.hourly?.uv_index || [], ts = d.hourly?.time || [];
+    let pi = -1;
+    hs.forEach((x, i) => { if (x != null && (pi < 0 || x > hs[pi])) pi = i; });
+    out.uv = { now: u, peak: pi >= 0 ? hs[pi] : u, peakAt: pi >= 0 ? hourLabel(ts[pi]) : null,
+      peakTomorrow: pi >= 0 && d.current.time ? ts[pi].slice(0, 10) !== d.current.time.slice(0, 10) : false };
+  }
+  return v != null || u != null ? out : null;
 }
 
 // National Weather Service (US only). Forecaster-reviewed grid forecast + real station observations.
@@ -893,8 +916,16 @@ const TERMS = {
     title: "Air quality",
     aka: "AQI: the Air Quality Index used by the US EPA, from 0 to 500",
     what: "One number for how clean the air is to breathe. It looks at the worst of several pollutants: tiny smoke and dust particles (PM2.5), ozone (smog that builds on hot sunny afternoons) and others. Under 50 is clean air. Wildfire smoke and traffic on hot, still days push it up. This reading comes from an air-quality forecast model, so it's close but not a measurement from a sensor on your street.",
-    extra: () => scaleList(AQI_LEVELS.map(([max, name], i) => [`${i ? AQI_LEVELS[i - 1][0] + 1 : 0}${max === Infinity ? "+" : "–" + max}`, name]), lastData?.aqi ? AQI_LEVELS.indexOf(aqiLevel(lastData.aqi.value)) : -1),
-    now: (c, d) => d.aqi ? `${d.aqi.value}: ${aqiLevel(d.aqi.value)[1]}. ${aqiLevel(d.aqi.value)[3]}${d.aqi.peak > d.aqi.value + 10 ? ` It may reach ${d.aqi.peak} in the next 24 hours.` : ""}` : null
+    extra: () => scaleList(AQI_LEVELS.map(([max, name], i) => [`${i ? AQI_LEVELS[i - 1][0] + 1 : 0}${max === Infinity ? "+" : "–" + max}`, name]), lastData?.aqi?.value != null ? AQI_LEVELS.indexOf(aqiLevel(lastData.aqi.value)) : -1),
+    now: (c, d) => d.aqi?.value != null ? `${d.aqi.value}: ${aqiLevel(d.aqi.value)[1]}. ${aqiLevel(d.aqi.value)[3]}${d.aqi.peak > d.aqi.value + 10 ? ` It may reach ${d.aqi.peak} in the next 24 hours.` : ""}` : null
+  },
+  uv: {
+    title: "UV index",
+    aka: "Ultraviolet index, from the World Health Organization and US EPA",
+    what: "How strong the sun's sunburn rays are. Ultraviolet (UV) light is invisible, and it's what burns skin and damages eyes, even on cool or cloudy days. The number climbs as the sun gets higher, so it peaks around midday and is highest in summer. Sand, water and snow bounce UV back up at you, so beach and snow days count extra.",
+    extra: () => scaleList(UV_LEVELS.map(([max, name], i) => [`${i ? UV_LEVELS[i - 1][0] + 1 : 0}${max === Infinity ? "+" : "–" + max}`, name]), lastData?.aqi?.uv ? UV_LEVELS.indexOf(uvLevel(lastData.aqi.uv.now)) : -1),
+    now: (c, d) => { const u = d.aqi?.uv; if (!u) return null; const p = Math.round(u.peak);
+      return `${Math.round(u.now)}: ${uvLevel(u.now)[1]}. ${p > Math.round(u.now) && u.peakAt ? `${u.peakTomorrow ? "Tomorrow it peaks" : "It peaks"} at ${p} (${uvLevel(u.peak)[1].toLowerCase()}) around ${u.peakAt}. ${uvLevel(u.peak)[3]}` : uvLevel(u.now)[3]}`; }
   },
   amount: {
     title: "Rain amount",
@@ -952,7 +983,7 @@ function explain(key) {
   if (!dlg.open) dlg.showModal();
   $("explainBody").scrollTop = 0;
 }
-const TERM_ORDER = ["temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "aqi", "visibility", "pop", "amount", "radar", "radarcast", "sunrise", "moon", "station", "forecast", "hourly", "alerts"];
+const TERM_ORDER = ["temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "aqi", "uv", "visibility", "pop", "amount", "radar", "radarcast", "sunrise", "moon", "station", "forecast", "hourly", "alerts"];
 function explainAll() {
   const order = TERM_ORDER;
   
@@ -1108,6 +1139,12 @@ function hourlyChart(hours) {
     <circle cx="${pts[0][0]}" cy="${pts[0][1]}" r="3.5" fill="var(--accent)"/></svg>`;
 }
 
+function uvStat(uv) {
+  const n = Math.round(uv.now), p = Math.round(uv.peak);
+  const peak = p > n && uv.peakAt ? `${uv.peakTomorrow ? "Tomorrow" : "Peak"} ${p} at ${uv.peakAt}` : "";
+  return ["uv", "UV index", `${n}`, [uvLevel(uv.now)[1], peak].filter(Boolean).join(" · "), uvLevel(uv.now)[2]];
+}
+
 function render() {
   const d = lastData;
   if (!d) return;
@@ -1122,7 +1159,8 @@ function render() {
     ["humidity", "Humidity", c.humidity != null ? Math.round(c.humidity) + "%" : "–"],
     ["dew", "Dew point", t(c.dewC)],
     ["pressure", "Pressure", pres(c.pressureHpa), [pressureLevel(c.pressureHpa), pressureTrend(c.pressureHpa, c.pressure3hAgo)?.word].filter(Boolean).join(", ")],
-    ...(d.aqi ? [["aqi", "Air quality", `${d.aqi.value} AQI`, aqiLevel(d.aqi.value)[1], aqiLevel(d.aqi.value)[2]]] : []),
+    ...(d.aqi?.value != null ? [["aqi", "Air quality", `${d.aqi.value} AQI`, aqiLevel(d.aqi.value)[1], aqiLevel(d.aqi.value)[2]]] : []),
+    ...(d.aqi?.uv ? [uvStat(d.aqi.uv)] : []),
     ["visibility", "Visibility", vis(c.visKm)]
   ].filter(([, , v]) => v !== "–");
 

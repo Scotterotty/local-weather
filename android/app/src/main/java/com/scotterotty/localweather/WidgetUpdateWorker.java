@@ -10,6 +10,9 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationManager;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
 import android.widget.RemoteViews;
 
 import androidx.annotation.NonNull;
@@ -101,6 +104,7 @@ public class WidgetUpdateWorker extends Worker {
             } catch (Exception nws) {
                 s = fetchOpenMeteo(loc[0], loc[1]);
             }
+            try { fetchAir(s, loc[0], loc[1]); } catch (Exception ignored) { }
             if (s.place == null) s.place = savedLabel(ctx);
             s.lat = loc[0];
             s.lon = loc[1];
@@ -309,6 +313,38 @@ public class WidgetUpdateWorker extends Worker {
         return s;
     }
 
+    // Air quality (US EPA AQI) and UV index: Open-Meteo's air-quality model, same as the app.
+    private static void fetchAir(Snapshot s, double lat, double lon) throws Exception {
+        JSONObject c = get(String.format(Locale.US,
+            "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=%.4f&longitude=%.4f&current=us_aqi,uv_index", lat, lon))
+            .getJSONObject("current");
+        if (!c.isNull("us_aqi")) s.aqi = (int) Math.round(c.getDouble("us_aqi"));
+        if (!c.isNull("uv_index")) s.uv = c.getDouble("uv_index");
+    }
+
+    private static int aqiColor(int v) {
+        if (v <= 50) return 0xFF00B050;
+        if (v <= 100) return 0xFFD4B300;
+        if (v <= 150) return 0xFFFF7E00;
+        if (v <= 200) return 0xFFE8202A;
+        if (v <= 300) return 0xFF8F3F97;
+        return 0xFF7E0023;
+    }
+
+    private static int uvColor(long v) {
+        if (v <= 2) return 0xFF3EA72D;
+        if (v <= 5) return 0xFFD4B300;
+        if (v <= 7) return 0xFFF18B00;
+        if (v <= 10) return 0xFFE53210;
+        return 0xFFB567A4;
+    }
+
+    private static void dot(SpannableStringBuilder b, int color) {
+        int at = b.length();
+        b.append("● ");
+        b.setSpan(new ForegroundColorSpan(color), at, at + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+    }
+
     // ---------- rendering ----------
     static void renderCached(Context ctx) {
         Snapshot s = Snapshot.load(ctx);
@@ -332,6 +368,7 @@ public class WidgetUpdateWorker extends Worker {
             v.setTextViewText(R.id.w_temp, "–");
             v.setTextViewText(R.id.w_desc, message != null ? message : "");
             v.setTextViewText(R.id.w_hilo, "");
+            v.setViewVisibility(R.id.w_air, android.view.View.GONE);
             v.setTextViewText(R.id.w_updated, "");
             v.setViewVisibility(R.id.w_hours, android.view.View.GONE);
             v.setTextViewText(R.id.w_sky, "");
@@ -343,6 +380,17 @@ public class WidgetUpdateWorker extends Worker {
             if (s.hiC != null) hl.append("H ").append(fmt(s.hiC, useC));
             if (s.loC != null) hl.append(hl.length() > 0 ? "  " : "").append("L ").append(fmt(s.loC, useC));
             v.setTextViewText(R.id.w_hilo, hl.toString());
+
+            // Air quality and UV, with a colored dot for the level (same colors as the app)
+            SpannableStringBuilder air = new SpannableStringBuilder();
+            if (s.aqi >= 0) { dot(air, aqiColor(s.aqi)); air.append("AQI ").append(String.valueOf(s.aqi)); }
+            if (!Double.isNaN(s.uv)) {
+                long uv = Math.round(s.uv);
+                if (air.length() > 0) air.append("   ");
+                dot(air, uvColor(uv)); air.append("UV ").append(String.valueOf(uv));
+            }
+            v.setTextViewText(R.id.w_air, air);
+            v.setViewVisibility(R.id.w_air, air.length() > 0 ? android.view.View.VISIBLE : android.view.View.GONE);
             String when = DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date(s.time));
             v.setTextViewText(R.id.w_updated, (s.station != null ? s.station + " · " : "") + when);
 
@@ -385,6 +433,8 @@ public class WidgetUpdateWorker extends Worker {
     static class Snapshot {
         String place, desc, station, source;
         Double tempC, hiC, loC;
+        int aqi = -1;
+        double uv = Double.NaN;
         long time;
         double lat, lon;
         JSONArray hours = new JSONArray();
@@ -397,6 +447,8 @@ public class WidgetUpdateWorker extends Worker {
                 if (hiC != null) o.put("hiC", hiC);
                 if (loC != null) o.put("loC", loC);
                 o.put("time", time);
+                o.put("aqi", aqi);
+                if (!Double.isNaN(uv)) o.put("uv", uv);
                 o.put("lat", lat); o.put("lon", lon); o.put("hours", hours);
                 ctx.getSharedPreferences(CACHE, Context.MODE_PRIVATE).edit().putString("snapshot", o.toString()).apply();
             } catch (Exception ignored) { }
@@ -416,6 +468,8 @@ public class WidgetUpdateWorker extends Worker {
                 s.hiC = o.has("hiC") ? o.getDouble("hiC") : null;
                 s.loC = o.has("loC") ? o.getDouble("loC") : null;
                 s.time = o.optLong("time");
+                s.aqi = o.optInt("aqi", -1);
+                s.uv = o.optDouble("uv", Double.NaN);
                 s.lat = o.optDouble("lat", 0); s.lon = o.optDouble("lon", 0);
                 JSONArray hs = o.optJSONArray("hours");
                 if (hs != null) s.hours = hs;
