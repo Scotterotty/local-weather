@@ -151,9 +151,18 @@ footer .term { font-size: .8rem; }
 
 /* Almanac */
 .almanac { display: grid; gap: 4px; }
+.alm-body { display: grid; gap: 4px; }
 .alm-sec { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 8px; }
-.alm-sec:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
-.alm-sec h3 { font: 600 1.1rem/1.25 var(--display); margin: 0 0 6px; }
+.alm-sec:first-of-type { border-top: 0; padding-top: 4px; margin-top: 0; }
+.alm-sec h3 { font: 600 1.1rem/1.25 var(--display); margin: 0; }
+.alm-sec[open] > summary { margin-bottom: 8px; }
+/* Collapsible headers: whole row is tappable, chevron on the right turns when open. */
+.alm-all > summary, .alm-sec > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; }
+.alm-all > summary::-webkit-details-marker, .alm-sec > summary::-webkit-details-marker { display: none; }
+.alm-all > summary::after, .alm-sec > summary::after { content: ""; flex: none; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin: -4px 4px 0 0; transition: transform .2s; }
+.alm-all[open] > summary::after, .alm-sec[open] > summary::after { transform: rotate(-135deg); margin-top: 4px; }
+.alm-all > summary .label { margin: 0; }
+.alm-all[open] > summary { margin-bottom: 10px; }
 .alm-sec p { margin: 0 0 8px; max-width: 65ch; }
 .alm-sec b { font-weight: 600; }
 .birds { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }

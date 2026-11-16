@@ -225,16 +225,27 @@ function almanacPanel() {
   return el;
 }
 
+// Collapsible sections. Which ones are closed is remembered on this device.
+const closedSecs = () => new Set(store.get("lw.closed") || []);
+const secOpen = (key) => closedSecs().has(key) ? "" : " open";
+document.addEventListener("toggle", (e) => {
+  const key = e.target?.dataset?.sec;
+  if (!key) return;
+  const set = closedSecs();
+  e.target.open ? set.delete(key) : set.add(key);
+  store.set("lw.closed", [...set]);
+}, true);
+
 function renderAlmanac() {
   const el = almanac.el, d = lastData;
   if (!el || !d) return;
   const now = new Date(), doy = doyOf(now), c = almanac.clim;
   const season = now.toLocaleDateString(undefined, { month: "long" });
-  let html = `<h2 class="label">Almanac for ${esc(season)}</h2>`;
+  let html = `<details class="alm-all" data-sec="almanac"${secOpen("almanac")}><summary><h2 class="label">Almanac for ${esc(season)}</h2></summary><div class="alm-body">`;
 
   if (!c) {
     html += `<p class="hint">${almanac.loading ? "Looking up 20 years of local weather…" : "The almanac needs a connection to load."}</p>`;
-    el.innerHTML = html;
+    el.innerHTML = html + `</div></details>`;
     return;
   }
 
@@ -245,44 +256,45 @@ function renderAlmanac() {
   const diff = avgHi != null && n ? (units === "F" ? (avgHi - n.hi) * 9 / 5 : avgHi - n.hi) : null;
   const mo = c.months[now.getMonth()];
   const rainTxt = units === "F" ? `${(mo.total / 25.4).toFixed(1)} in` : `${Math.round(mo.total)} mm`;
-  html += `<div class="alm-sec"><h3>${termBtn("normal", "This time of year")}</h3>
+  html += `<details class="alm-sec" data-sec="normal"${secOpen("normal")}><summary><h3>${termBtn("normal", "This time of year")}</h3></summary>
     ${n ? `<p>A normal ${esc(monthDay(doy))} here is a high of <b>${t(n.hi)}</b> and a low of <b>${t(n.lo)}</b>. The warmest it has been in the last ${c.years} years around this date was ${t(n.recHi)}, and the coldest ${t(n.recLo)}.</p>` : ""}
     ${diff != null ? `<p>${Math.abs(diff) < 2 ? "The coming week looks close to normal." : `The coming week looks about <b>${Math.round(Math.abs(diff))}° ${diff > 0 ? "warmer" : "cooler"}</b> than normal.`}</p>` : ""}
-    <p>${esc(season)} usually brings about ${Math.round(mo.wet)} rainy day${Math.round(mo.wet) === 1 ? "" : "s"} and ${rainTxt} of rain in total.</p></div>`;
+    <p>${esc(season)} usually brings about ${Math.round(mo.wet)} rainy day${Math.round(mo.wet) === 1 ? "" : "s"} and ${rainTxt} of rain in total.</p></details>`;
 
   // 2. Frost and zone
   const frostRare = c.frostYears < c.years / 4;
   const z = almanac.zone, zEst = zoneFromExtreme(c.meanExtremeMinC);
-  html += `<div class="alm-sec"><h3>${termBtn("frost", "Frost dates")} and ${termBtn("zone", "growing zone")}</h3>
+  html += `<details class="alm-sec" data-sec="frost"${secOpen("frost")}><summary><h3>${termBtn("frost", "Frost dates")} and ${termBtn("zone", "growing zone")}</h3></summary>
     <p>${frostRare ? `Frost is rare here: it showed up in only ${c.frostYears} of the last ${c.years} winters.` : `Last spring frost: around <b>${esc(monthDay(c.lastSpring))}</b>. First fall frost: around <b>${esc(monthDay(c.firstFall))}</b>. That's about ${Math.round((c.firstFall - c.lastSpring) / 7)} weeks of frost-free growing.`}</p>
-    <p>${z ? `USDA hardiness zone <b>${termBtn("zone", esc(z.zone))}</b>${z.range ? ` (coldest nights usually ${esc(z.range)}°F)` : ""}.` : zEst ? `About USDA hardiness zone <b>${termBtn("zone", zEst)}</b>, estimated from 20 years of local temperatures.` : ""}</p></div>`;
+    <p>${z ? `USDA hardiness zone <b>${termBtn("zone", esc(z.zone))}</b>${z.range ? ` (coldest nights usually ${esc(z.range)}°F)` : ""}.` : zEst ? `About USDA hardiness zone <b>${termBtn("zone", zEst)}</b>, estimated from 20 years of local temperatures.` : ""}</p></details>`;
 
   // 3. Garden
   const tips = plantingNow(c, doy);
-  if (tips.length) html += `<div class="alm-sec"><h3>In the garden</h3>${tips.map(([k, v]) => `<p><b>${esc(k)}:</b> ${esc(v)}</p>`).join("")}</div>`;
+  if (tips.length) html += `<details class="alm-sec" data-sec="garden"${secOpen("garden")}><summary><h3>In the garden</h3></summary>${tips.map(([k, v]) => `<p><b>${esc(k)}:</b> ${esc(v)}</p>`).join("")}</details>`;
 
   // 4. Birds
   const b = almanac.birds;
-  html += `<div class="alm-sec"><h3>Birds around in ${esc(season)}</h3>`;
+  html += `<details class="alm-sec" data-sec="birds"${secOpen("birds")}><summary><h3>Birds around in ${esc(season)}</h3></summary>`;
   if (b && b.length) {
     html += `<p class="hint">The birds people have photographed most often within 15 miles of you in ${esc(season)}, from ${termBtn("inat", "iNaturalist")}.</p>
       <div class="birds">${b.map((x) => `<a class="bird" href="https://www.inaturalist.org/taxa/${x.id}" target="_blank" rel="noopener" title="${esc(x.sci)}${x.credit ? ` · Photo ${esc(x.credit)}` : ""}">
         ${x.photo ? `<img src="${esc(x.photo)}" alt="" loading="lazy" width="56" height="56">` : `<span class="noimg"></span>`}
         <span><span class="bn">${esc(x.name)}</span><span class="bc">${x.count.toLocaleString()} sightings</span></span></a>`).join("")}</div>`;
   } else html += `<p class="hint">${b ? "No bird sightings recorded near here for this month yet." : "Loading sightings…"}</p>`;
-  html += `</div>`;
+  html += `</details>`;
 
   // 5. Stars tonight
   const st = starsTonight(d);
-  html += `<div class="alm-sec"><h3>${termBtn("constellation", "Stars tonight")}</h3>
+  html += `<details class="alm-sec" data-sec="stars"${secOpen("stars")}><summary><h3>${termBtn("constellation", "Stars tonight")}</h3></summary>
     <p><span class="rate rate-${st.rating.toLowerCase()}">${st.rating}</span> for ${termBtn("stargazing", "stargazing")} around ${esc(fmtTime(st.when))}. ${esc(st.why[0])}, and ${esc(st.why[1])}.</p>
     ${st.visible.length ? `<div class="stars">${st.visible.map((c) => `<div class="star-card">
       <div class="sc-top"><b>${esc(c.name)}</b><span class="where">${esc(whereToLook(c.pos))}</span></div>
       <p>${esc(c.find)}</p><p class="fact">${esc(c.fact)}</p></div>`).join("")}</div>` : `<p>No major constellations are well placed right now.</p>`}
-    <p class="hint">Away from streetlights you'll see far more. Give your eyes 15 minutes to adjust, and use red light if you need a flashlight.</p></div>`;
+    <p class="hint">Away from streetlights you'll see far more. Give your eyes 15 minutes to adjust, and use red light if you need a flashlight.</p></details>`;
 
   // 6. Folklore
-  html += `<div class="alm-sec"><h3>Sky and weather sayings</h3>${folklore(d).map((f) => `<div class="lore"><p class="say">“${esc(f.say)}”</p><p><b>Science says:</b> ${esc(f.sci)}</p></div>`).join("")}</div>`;
+  html += `<details class="alm-sec" data-sec="sayings"${secOpen("sayings")}><summary><h3>Sky and weather sayings</h3></summary>${folklore(d).map((f) => `<div class="lore"><p class="say">“${esc(f.say)}”</p><p><b>Science says:</b> ${esc(f.sci)}</p></div>`).join("")}</details>`;
+  html += `</div></details>`;
   el.innerHTML = html;
 }
 
