@@ -207,8 +207,11 @@ footer .term { font-size: .8rem; }
 /* Radar */
 .radar-map { height: 340px; border-radius: 10px; overflow: hidden; background: var(--line); margin: 0 -4px; }
 @media (max-width: 420px) { .radar-map { height: 300px; } }
-.radar-bar { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
-.radar-bar .when { font: 500 .95rem var(--display); font-variant-numeric: tabular-nums; min-width: 6.5rem; }
+/* The time label sits on the map, so its changing length ("Now" vs "10:30 PM · in 1.5 hr") can't resize anything. */
+.radar-wrap { position: relative; }
+.radar-wrap .when { position: absolute; right: 8px; top: 8px; z-index: 800; pointer-events: none; font: 600 .95rem var(--display); font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, var(--surface) 88%, transparent); color: var(--fg); padding: 4px 10px; border-radius: 8px; box-shadow: 0 1px 4px rgb(0 0 0 / .2); white-space: nowrap; }
+.radar-bar { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 .radar-bar input[type=range] { flex: 1 1 140px; accent-color: var(--accent); min-width: 0; }
 .radar-legend { margin-top: 10px; display: grid; gap: 4px; }
 .radar-legend .ramp { height: 10px; border-radius: 5px; background: linear-gradient(90deg, #04e9e7 0%, #019ff4 12%, #02fd02 22%, #01c501 32%, #008e00 40%, #fdf802 50%, #e5bc00 57%, #fd9500 64%, #fd0000 72%, #d40000 79%, #bc0000 85%, #f800fd 92%, #9854c6 100%); }
@@ -699,11 +702,13 @@ function radarPanel() {
       <button type="button" data-mode="past" aria-pressed="false">Past hour</button>
     </div>
     <div class="hint" id="radarHint"></div>
-    <div class="radar-map" id="radarMap" role="img" aria-label="Radar map of rain and snow near you"></div>
+    <div class="radar-wrap">
+      <div class="radar-map" id="radarMap" role="img" aria-label="Radar map of rain and snow near you"></div>
+      <span class="when" id="radarWhen" aria-live="off">Now</span>
+    </div>
     <div class="radar-bar">
       <button type="button" id="radarPlay">Pause</button>
       <input type="range" id="radarSlider" min="0" value="0" aria-label="Radar time">
-      <span class="when" id="radarWhen">Now</span>
     </div>
     <div class="radar-legend" aria-hidden="true"><div class="ramp"></div>
       <div class="words"><span>Drizzle</span><span>Light rain</span><span>Heavy rain</span><span>Storms</span><span>Hail</span></div></div>
