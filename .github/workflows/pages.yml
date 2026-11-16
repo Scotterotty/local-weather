@@ -26,7 +26,10 @@ jobs:
       # One-time setup: repo Settings > Pages > Source: GitHub Actions
       - uses: actions/configure-pages@v5
       - name: Stamp the version shown at the bottom of the app
-        run: sed -i "s/__BUILD__/${GITHUB_SHA::7} · $(TZ=America/Los_Angeles date '+%b %-d, %-I:%M %p')/" www/index.html
+        # __V__ makes each deploy's scripts a new URL, so the phone never mixes a new page with old cached scripts.
+        run: |
+          sed -i "s/__BUILD__/${GITHUB_SHA::7} · $(TZ=America/Los_Angeles date '+%b %-d, %-I:%M %p')/" www/index.html
+          sed -i "s/__V__/${GITHUB_SHA::7}/g" www/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: www

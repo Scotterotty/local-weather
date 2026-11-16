@@ -137,8 +137,8 @@ function soundtrackHtml(d) {
     <details class="alm-all" data-sec="music"${typeof secOpen === "function" ? secOpen("music") : " open"}>
       <summary><h2 class="label">Soundtrack for your day</h2></summary>
       <p class="hint">Music picked to match the weather ahead.</p>
-      <div class="tracks">${rows}</div>
       <div id="djSlot"></div>
+      <div class="tracks">${rows}</div>
     </details>
   </section>`;
 }

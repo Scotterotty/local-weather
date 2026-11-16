@@ -79,7 +79,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .track-links { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 0 !important; }
 .track-links a { font: 500 .85rem var(--body); text-decoration: none; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--fg); }
 .track-links a.spotify { background: #1db954; border-color: #1db954; color: #08200f; }
-.dj { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+.dj { margin: 10px 0 14px; border: 1px solid color-mix(in srgb, #1db954 45%, var(--line)); border-radius: 12px; padding: 12px 14px; }
 .dj h3 { font: 600 1.1rem/1.25 var(--display); margin: 0 0 6px; }
 .dj p { margin: 0 0 8px; }
 .dj-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 8px; }
@@ -1459,9 +1459,9 @@ document.addEventListener("visibilitychange", () => {
 reviveCache();
 locate();
 </script>
-<script src="almanac.js"></script>
-<script src="wordofday.js"></script>
-<script src="soundtrack.js"></script>
-<script src="dj.js"></script>
+<script src="almanac.js?v=__V__"></script>
+<script src="wordofday.js?v=__V__"></script>
+<script src="soundtrack.js?v=__V__"></script>
+<script src="dj.js?v=__V__"></script>
 </body>
 </html>
