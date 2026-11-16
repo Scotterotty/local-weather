@@ -120,6 +120,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .hour .temp { font: 600 1rem var(--display); }
 .hour .pop { font-size: .72rem; color: var(--rain); min-height: 1.1em; }
 .hour .amt { font-size: .68rem; color: var(--rain); min-height: 1.1em; font-weight: 600; white-space: nowrap; }
+.amt .term, .day .pop .term { font: inherit; color: inherit; }
 .total { font-size: .88rem; margin: -2px 0 12px; }
 .total b { color: var(--rain); font-weight: 600; }
 .chart { display: block; height: 54px; width: 100%; }
@@ -383,6 +384,8 @@ function sumForDay(map, dayKey) {
   for (const [h, mm] of map) if (localDay(h * 36e5) === dayKey) total += mm;
   return total;
 }
+// "trace" as a tappable word that opens its explanation
+const traceTap = (txt) => txt.replace(/\btrace\b/, termBtn("trace", "trace"));
 // 0.004 in shows nothing; under 0.01 in is a "trace"
 function amount(mm, snow = false) {
   if (mm == null || mm < 0.1) return "";
@@ -976,6 +979,13 @@ const TERMS = {
     extra: () => scaleList(AQI_LEVELS.map(([max, name], i) => [`${i ? AQI_LEVELS[i - 1][0] + 1 : 0}${max === Infinity ? "+" : "–" + max}`, name]), lastData?.aqi?.value != null ? AQI_LEVELS.indexOf(aqiLevel(lastData.aqi.value)) : -1),
     now: (c, d) => d.aqi?.value != null ? `${d.aqi.value}: ${aqiLevel(d.aqi.value)[1]}. ${aqiLevel(d.aqi.value)[3]}${d.aqi.peak > d.aqi.value + 10 ? ` It may reach ${d.aqi.peak} in the next 24 hours.` : ""}` : null
   },
+  trace: {
+    title: "Trace",
+    aka: "Weather Service shorthand: a trace of rain or snow",
+    what: "Some rain or snow is expected, but too little to measure. Rain gauges count in hundredths of an inch, so anything under 0.01 inch of rain (or 0.1 inch of snow) is called a trace. In real life that's a few sprinkles or flurries: enough to dot the windshield or dampen the sidewalk, not enough to need an umbrella for long.",
+    extra: () => scaleList([["Trace", "Under 0.01 in. A few drops"], ["0.01–0.10 in", "Light. Damp pavement"], ["0.10–0.25 in", "A steady light rain"], ["0.25 in or more", "A real soaking"]], 0),
+    now: (c, d) => { const n = d.hourly.filter((h) => amount(h.rainMm) === "trace").length; return n ? `${n} of the next 24 hours show${n === 1 ? "s" : ""} a trace: maybe a sprinkle, probably not enough to notice.` : "No hours with just a trace in the next 24 hours."; }
+  },
   uv: {
     title: "UV index",
     aka: "Ultraviolet index, from the World Health Organization and US EPA",
@@ -1040,7 +1050,7 @@ function explain(key) {
   if (!dlg.open) dlg.showModal();
   $("explainBody").scrollTop = 0;
 }
-const TERM_ORDER = ["temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "aqi", "uv", "visibility", "pop", "amount", "radar", "radarcast", "sunrise", "moon", "station", "forecast", "hourly", "alerts"];
+const TERM_ORDER = ["temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "aqi", "uv", "visibility", "pop", "amount", "trace", "radar", "radarcast", "sunrise", "moon", "station", "forecast", "hourly", "alerts"];
 function explainAll() {
   const order = TERM_ORDER;
   
@@ -1259,7 +1269,7 @@ function render() {
       const parts = [amount(r) && `${amount(r)} of rain`, amount(sn, true) && `${amount(sn, true)} of snow`].filter(Boolean);
       return `<div class="total">${parts.length ? `Expected in the next 24 hours: <b>${parts.join(" and ")}</b>` : "No measurable rain or snow expected in the next 24 hours"}</div>`; })()}
     <div class="hourly-wrap">
-      <div class="hourly">${d.hourly.map((h, i) => `<div class="hour"><div class="t">${i === 0 ? "Now" : fmtHour(h.time)}</div>${iconFor(h.desc, h.isDay)}<div class="temp">${t(h.tempC)}</div><div class="pop">${h.pop ? h.pop + "%" : ""}</div><div class="amt">${amount(h.snowMm, true) ? "❄ " + amount(h.snowMm, true) : amount(h.rainMm)}</div></div>`).join("")}</div>
+      <div class="hourly">${d.hourly.map((h, i) => `<div class="hour"><div class="t">${i === 0 ? "Now" : fmtHour(h.time)}</div>${iconFor(h.desc, h.isDay)}<div class="temp">${t(h.tempC)}</div><div class="pop">${h.pop ? h.pop + "%" : ""}</div><div class="amt">${traceTap(amount(h.snowMm, true) ? "❄ " + amount(h.snowMm, true) : amount(h.rainMm))}</div></div>`).join("")}</div>
       ${hourlyChart(d.hourly)}
     </div>
   </section>
@@ -1271,7 +1281,7 @@ function render() {
       <div class="day">
         <div class="name">${esc(x.name)}</div>
         ${iconFor(x.desc, x.isDay !== false)}
-        <div class="short">${esc(x.desc)}${x.pop ? ` <span class="pop">· ${x.pop}%${amount(x.rainMm) ? `, ${amount(x.rainMm)}` : ""}${amount(x.snowMm, true) ? `, ${amount(x.snowMm, true)} snow` : ""}</span>` : ""}</div>
+        <div class="short">${esc(x.desc)}${x.pop ? ` <span class="pop">· ${x.pop}%${amount(x.rainMm) ? `, ${traceTap(amount(x.rainMm))}` : ""}${amount(x.snowMm, true) ? `, ${traceTap(amount(x.snowMm, true))} snow` : ""}</span>` : ""}</div>
         <div class="range">${x.hiC != null ? t(x.hiC) : ""}${x.loC != null ? ` <span class="lo">${t(x.loC)}</span>` : ""}</div>
         ${x.detail || x.nightDetail ? `<details><summary>Forecaster notes</summary><p>${termBtn("forecast", "Who writes these?")}</p>${x.detail ? `<p>${esc(x.detail)}</p>` : ""}${x.nightDetail ? `<p>Night: ${esc(x.nightDetail)}</p>` : ""}</details>` : ""}
       </div>`).join("")}</div>
