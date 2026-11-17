@@ -105,6 +105,13 @@ function pickSoundtrack(sky, part, avgC) {
   return s[part] || s.any;
 }
 
+// "2026-11-17" for the block an hour belongs to (night after midnight belongs to the evening before). The Android
+// DJ worker computes the same key, so it can find the card for the block it's in.
+function blockDay(time) {
+  const d = new Date(time.getTime() - (time.getHours() <= 4 ? 864e5 : 0));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 // The next three parts of the day that have at least two forecast hours.
 function dayParts(hourly) {
   const groups = [];
@@ -115,7 +122,7 @@ function dayParts(hourly) {
     const key = p + anchor;
     const last = groups[groups.length - 1];
     if (last && last.key === key) last.hours.push(h);
-    else groups.push({ key, part: p, hours: [h], anchor });
+    else groups.push({ key, part: p, hours: [h], anchor, dayKey: blockDay(h.time) });
   }
   const today = new Date().toDateString();
   return groups.filter((g, i) => g.hours.length >= 2 || i === 0).slice(0, 3).map((g) => {
@@ -157,7 +164,7 @@ function soundtrackHtml(d) {
       <p>${esc(why)}</p>
       <p class="track-artists">Try ${artists.map(esc).join(", ")}</p>
       <p class="track-pl"></p>
-      <p class="track-links"><a class="spotify" data-q="${esc(decodeURIComponent(q))}" href="https://open.spotify.com/search/${q}" target="_blank" rel="noopener">Find on Spotify</a><a href="https://music.youtube.com/search?q=${q}" target="_blank" rel="noopener">YouTube Music</a></p>
+      <p class="track-links"><a class="spotify" data-q="${esc(decodeURIComponent(q))}" data-block="${g.dayKey}/${g.part}" data-sky="${sky}" href="https://open.spotify.com/search/${q}" target="_blank" rel="noopener">Find on Spotify</a><a href="https://music.youtube.com/search?q=${q}" target="_blank" rel="noopener">YouTube Music</a></p>
     </div>`;
   }).join("");
   return `<section class="panel soundtrack" aria-label="Soundtrack for your day">
@@ -190,6 +197,7 @@ async function linkPlaylists() {
   let cache = {};
   try { cache = JSON.parse(localStorage.getItem("lw.plCache") || "{}"); } catch { }
   if (cache.day !== day) cache = { day };
+  const blocks = {};   // what each card picked, so the Weather DJ plays the same playlist in that part of the day
   for (const a of document.querySelectorAll(".track-links a.spotify[data-q]")) {
     const q = a.dataset.q;
     let pl = cache[q];
@@ -198,6 +206,7 @@ async function linkPlaylists() {
       if (!found) continue;
       pl = cache[q] = { id: found.id || found.uri.split(":").pop(), name: found.name };
     }
+    blocks[a.dataset.block] = { sky: a.dataset.sky, q, uri: `spotify:playlist:${pl.id}`, name: pl.name };
     a.href = `https://open.spotify.com/playlist/${encodeURIComponent(pl.id)}`;
     a.textContent = "Open playlist on Spotify";
     a.title = pl.name;
@@ -205,4 +214,5 @@ async function linkPlaylists() {
     if (name) name.textContent = `Playlist: ${pl.name}`;
   }
   try { localStorage.setItem("lw.plCache", JSON.stringify(cache)); } catch { }
+  if (Object.keys(blocks).length) await djSave({ blocks }).catch(() => {});
 }

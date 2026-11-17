@@ -118,16 +118,16 @@ public class SpotifyDjWorker extends Worker {
         String part = partOfDay(Calendar.getInstance().get(Calendar.HOUR_OF_DAY));
         String mood = sky + "/" + part;
         String oldSky = dj.optString("sky", "");
-        // Only a change in the current conditions changes the music (not the time of day, not forecast chances).
-        if (sky.equals(oldSky)) { dj.remove("pending"); log(ctx, dj, sky, "same as before, no change"); return; }
+        boolean newPart = !part.equals(dj.optString("part", ""));
+        // New music when the conditions outside change, or at a new part of the day (morning, afternoon, evening, night).
+        // Forecast chances never change it.
+        if (sky.equals(oldSky) && !newPart) { dj.remove("pending"); log(ctx, dj, sky, "same as before, no change"); return; }
+        String why = newPart ? "it's now " + ("night".equals(part) ? "night" : "the " + part) : "conditions changed";
 
         if (p == null) {
             // Nothing of ours is playing: just keep the ready-to-play pick current, so Play starts the right music.
-            JSONObject styles = dj.optJSONObject("styles");
-            JSONObject bySky = styles == null ? null : styles.optJSONObject(sky);
-            String query = bySky == null ? null : bySky.optString(part, null);
-            JSONObject pl = query == null ? null : findPlaylist(ctx, dj, query, dj.optString("context"));
-            if (pl == null) { log(ctx, dj, sky, "changed, but no playlist found"); return; }
+            JSONObject pl = pickFor(ctx, dj, sky, part);
+            if (pl == null) { log(ctx, dj, sky, why + ", but no playlist found"); return; }
             dj.put("context", pl.getString("uri"));
             dj.put("playlistName", pl.optString("name"));
             dj.put("sky", sky);
@@ -135,20 +135,19 @@ public class SpotifyDjWorker extends Worker {
             dj.put("mood", mood);
             dj.remove("pending");
             dj.remove("next");
-            log(ctx, dj, sky, "changed; nothing playing, so the next Play uses " + pl.optString("name"));
+            log(ctx, dj, sky, why + "; nothing playing, so the next Play uses " + pl.optString("name"));
             return;
         }
 
         // Rain, snow or storms starting or stopping switches right away. A change between sunny, partly cloudy and
         // cloudy has to show up on two checks in a row, so one passing cloud doesn't change the music.
-        boolean sure = wet(sky) || wet(oldSky);
-        if (!sure && !sky.equals(dj.optString("pending"))) { dj.put("pending", sky); log(ctx, dj, sky, "changed; confirming on the next check"); return; }
+        // A new part of the day, or rain/snow/storms starting or stopping, switches at the end of this song. Other sky
+        // changes have to show up on two checks in a row, so one passing cloud doesn't change the music.
+        boolean sure = newPart || wet(sky) || wet(oldSky);
+        if (!sure && !sky.equals(dj.optString("pending"))) { dj.put("pending", sky); log(ctx, dj, sky, "conditions changed; confirming on the next check"); return; }
 
-        JSONObject styles = dj.optJSONObject("styles");
-        String query = styles == null ? null : styles.optJSONObject(sky) == null ? null : styles.getJSONObject(sky).optString(part, null);
-        if (query == null) { log(ctx, dj, sky, "changed, but no style for it"); return; }
-        JSONObject pl = findPlaylist(ctx, dj, query, dj.optString("context"));
-        if (pl == null) { log(ctx, dj, sky, "changed, but no playlist found"); return; }
+        JSONObject pl = pickFor(ctx, dj, sky, part);
+        if (pl == null) { log(ctx, dj, sky, why + ", but no playlist found"); return; }
 
         JSONObject item = p.optJSONObject("item");
         long left = item == null ? 0 : item.optLong("duration_ms") - p.optLong("progress_ms");
@@ -156,7 +155,7 @@ public class SpotifyDjWorker extends Worker {
             .put("sky", sky).put("part", part).put("track", item == null ? "" : item.optString("id"));
         dj.put("next", next);
         dj.remove("pending");
-        log(ctx, dj, sky, "changed; switching to " + pl.optString("name") + " when this song ends");
+        log(ctx, dj, sky, why + "; switching to " + pl.optString("name") + " when this song ends");
         scheduleSwitch(ctx, left - 1500);   // just before the song ends; doSwitch waits if it's early
     }
 
@@ -222,6 +221,28 @@ public class SpotifyDjWorker extends Worker {
         if ("mostly".equals(k)) k = "clear";
         if (c.optDouble("precipitation", 0) >= 0.2 && !wet(k)) k = "rain";
         return k;
+    }
+
+    // ---------- picking ----------
+    /** Same key as blockDay() in soundtrack.js: local date, with the small hours counted as the night before. */
+    private static String blockDay() {
+        Calendar c = Calendar.getInstance();
+        if (c.get(Calendar.HOUR_OF_DAY) <= 4) c.add(Calendar.DAY_OF_MONTH, -1);
+        return String.format(Locale.US, "%04d-%02d-%02d", c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH));
+    }
+
+    /** The playlist the app's Soundtrack card picked for this part of the day (if it was picked for this sky), else a search. */
+    private static JSONObject pickFor(Context ctx, JSONObject dj, String sky, String part) throws Exception {
+        JSONObject blocks = dj.optJSONObject("blocks");
+        JSONObject card = blocks == null ? null : blocks.optJSONObject(blockDay() + "/" + part);
+        String current = dj.optString("context");
+        if (card != null && sky.equals(card.optString("sky")) && !card.optString("uri").isEmpty() && !card.optString("uri").equals(current)) {
+            return new JSONObject().put("uri", card.getString("uri")).put("name", card.optString("name"));
+        }
+        JSONObject styles = dj.optJSONObject("styles");
+        JSONObject bySky = styles == null ? null : styles.optJSONObject(sky);
+        String query = bySky == null ? null : bySky.optString(part, null);
+        return query == null ? null : findPlaylist(ctx, dj, query, current);
     }
 
     // ---------- Spotify ----------

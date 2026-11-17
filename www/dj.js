@@ -115,12 +115,21 @@ function moodNow() {
 
 // While nothing is playing, keep the ready-to-play pick in step with the weather and time of day
 // (the background switcher only acts while the DJ's playlist is playing).
+// The playlist for this part of the day: the one its Soundtrack card shows, if the card was picked for the same
+// sky we have now; otherwise a fresh search for this sky + part of day.
+async function pickFor(dj, sky, part, avoid) {
+  const card = dj.blocks?.[`${blockDay(new Date())}/${part}`];
+  if (card?.uri && card.sky === sky && card.uri !== avoid) return { uri: card.uri, name: card.name };
+  return findPlaylist(djStyles()[sky][part], avoid);
+}
+
 async function djRefreshPick(dj) {
   if (!lastData) return dj;
   const { sky, part } = moodNow();
-  if (dj.sky === sky) return dj;   // only a change in the current conditions changes the music
+  // New music when the conditions change, or when morning turns to afternoon, afternoon to evening, and so on.
+  if (dj.sky === sky && dj.part === part) return dj;
   const styles = djStyles();
-  const pl = await findPlaylist(styles[sky][part], dj.context).catch(() => null);
+  const pl = await pickFor(dj, sky, part, dj.context).catch(() => null);
   if (!pl) return dj;
   return djSave({ styles, sky, part, mood: `${sky}/${part}`, context: pl.uri, playlistName: pl.name, pending: null, next: null });
 }
@@ -130,7 +139,7 @@ async function djStart() {
   try {
     const { sky, part } = moodNow();
     const styles = djStyles();
-    const pl = await findPlaylist(styles[sky][part]);
+    const pl = await pickFor(await djLoad(), sky, part);
     if (!pl) throw new Error("Couldn't find a playlist for this weather. Try again in a moment.");
     const devs = (await spotify("GET", "/me/player/devices"))?.devices || [];
     const dev = devs.find((d) => d.is_active) || devs.find((d) => d.type === "Smartphone") || devs[0];
@@ -200,7 +209,7 @@ async function renderDJ() {
     // or the background switcher would stop recognizing the music that's playing.
     if (!playing && p !== undefined) dj = await djRefreshPick(dj);
     const id = (dj.context || "").split(":").pop();
-    body = `<p><b>On.</b> ${playing ? "Playing" : "Ready to play"} <b>${esc(dj.playlistName || "a weather playlist")}</b> for ${esc(SKY_NOW[dj.sky] || "the weather right now")}.${playing && p.item ? ` Now: ${esc(p.item.name)} · ${esc((p.item.artists || []).map((a) => a.name).join(", "))}.` : ""} Changes only when the conditions outside change (checked about every 15 minutes).</p>
+    body = `<p><b>On.</b> ${playing ? "Playing" : "Ready to play"} <b>${esc(dj.playlistName || "a weather playlist")}</b> for ${esc(SKY_NOW[dj.sky] || "the weather right now")}${dj.part ? (dj.part === "night" ? " tonight" : ` this ${esc(dj.part)}`) : ""}.${playing && p.item ? ` Now: ${esc(p.item.name)} · ${esc((p.item.artists || []).map((a) => a.name).join(", "))}.` : ""} Changes with the weather and with the time of day (morning, afternoon, evening, night), after the song that's playing.</p>
       ${dj.lastCheck ? `<p class="hint">Last check ${esc(fmtTime(new Date(dj.lastCheck.at)))}${dj.lastCheck.sky ? `: ${esc(SKY_WORD[dj.lastCheck.sky] || dj.lastCheck.sky)}` : ""}, ${esc(dj.lastCheck.what)}.</p>` : ""}
       <div class="dj-row">${playing ? `<button type="button" class="dj-go dj-pp" id="djPause">${DJ_ICON.pause}Pause</button>` : `<button type="button" class="dj-go dj-pp" id="djPlay">${DJ_ICON.play}Play</button>`}<button type="button" id="djStart">New playlist</button><button type="button" id="djStop">Turn off</button></div>
       ${id ? `<p class="hint"><a href="https://open.spotify.com/playlist/${esc(id)}" target="_blank" rel="noopener">Open this playlist in Spotify</a> to follow or save it.</p>` : ""}`;
