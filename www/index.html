@@ -95,6 +95,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .word-why { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border-radius: 12px; padding: 10px 14px; margin: 10px 0; }
 .word-why .k { font: 600 .68rem var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
 .word-more { display: flex; gap: 8px; flex-wrap: wrap; }
+.term.cond { font: inherit; color: inherit; text-align: left; }
+.sky-ladder .cover { width: 1.5em; height: 1.5em; vertical-align: -.2em; margin-right: 8px; flex: none; }
+.sky-ladder li > span:first-child { display: inline-flex; align-items: center; }
 .aqi-dot { display: inline-block; width: .7em; height: .7em; border-radius: 50%; margin-right: 6px; vertical-align: .05em; box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 20%, transparent); }
 .stat .v { font-size-adjust: var(--display-adjust, none); }
 .now .big { font: 500 5rem/1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
@@ -881,13 +884,86 @@ function iconFor(desc = "", isDay = true) {
 // ---------- explanations ----------
 // Each entry: title, what it is, why it matters, and (when we have a value) what today's number means.
 const termBtn = (key, text) => `<button type="button" class="term" data-term="${key}">${text}</button>`;
+const condBtn = (desc) => `<button type="button" class="term cond" data-term="sky" data-arg="${esc(desc)}">${esc(desc)}</button>`;
 const F = (c) => cToF(c);
 function scaleList(rows, activeIdx) {
   return `<ul class="scale">${rows.map(([a, b], i) => `<li class="${i === activeIdx ? "on" : ""}"><span>${a}</span><span>${b}</span></li>`).join("")}</ul>`;
 }
 function pickIdx(v, limits) { let i = 0; while (i < limits.length && v >= limits[i]) i++; return i; }
 
+// ---------- weather condition words ----------
+// The National Weather Service sky-cover ladder: how much of the sky is covered by cloud, in eighths.
+const SKY_LADDER = [
+  [0, "Sunny / Clear", "No clouds, or nearly none (0 to 1/8 of the sky)"],
+  [2, "Mostly sunny / Mostly clear", "A few clouds (1/8 to 3/8)"],
+  [4, "Partly sunny / Partly cloudy", "About half the sky (3/8 to 5/8)"],
+  [6, "Mostly cloudy", "Clouds cover most of the sky, with some breaks (5/8 to 7/8)"],
+  [8, "Cloudy / Overcast", "The whole sky is covered (8/8)"]
+];
+function skyRung(desc) {
+  const s = (desc || "").toLowerCase();
+  if (/overcast|^cloudy|\bcloudy$/.test(s) && !/partly|mostly/.test(s)) return 4;
+  if (/mostly cloudy|considerable cloud/.test(s)) return 3;
+  if (/partly|scattered clouds/.test(s)) return 2;
+  if (/mostly (sunny|clear)|few clouds|fair|mainly clear/.test(s)) return 1;
+  if (/sunny|clear/.test(s)) return 0;
+  return -1;
+}
+// A circle with `eighths` of it shaded, the way weather maps draw cloud cover.
+const coverDot = (eighths) => { const a = (eighths / 8) * 2 * Math.PI, x = 8 + 7 * Math.sin(a), y = 8 - 7 * Math.cos(a);
+  const fill = eighths >= 8 ? `<circle cx="8" cy="8" r="7" fill="var(--muted)"/>` : eighths > 0 ? `<path d="M8 8V1A7 7 0 ${eighths > 4 ? 1 : 0} 1 ${x.toFixed(2)} ${y.toFixed(2)}Z" fill="var(--muted)"/>` : "";
+  return `<svg class="cover" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="color-mix(in srgb, var(--warm) 25%, var(--surface))"/>${fill}<circle cx="8" cy="8" r="7" fill="none" stroke="var(--muted)" stroke-width="1"/></svg>`; };
+
+// Plain-words meaning of any condition the app can show (NWS forecasts and observations, Open-Meteo).
+function conditionMeaning(desc) {
+  const s = (desc || "").toLowerCase(), out = [];
+  if (/slight chance/.test(s)) out.push("\"Slight chance\" means about a 1 in 5 chance (20%) at any one spot.");
+  else if (/chance/.test(s)) out.push("\"Chance\" means about a 3 to 5 in 10 chance (30 to 50%) at any one spot.");
+  if (/likely/.test(s)) out.push("\"Likely\" means it probably will happen: about a 6 or 7 in 10 chance.");
+  if (/isolated/.test(s)) out.push("\"Isolated\" means only a few spots get it (about 10 to 20% of the area).");
+  if (/scattered/.test(s) && !/clouds/.test(s)) out.push("\"Scattered\" means some places get it and others stay dry (about 30 to 50% of the area).");
+  if (/periods of/.test(s)) out.push("\"Periods of\" means it comes and goes, with breaks in between.");
+  if (/thunder|t-storm/.test(s)) out.push("Thunderstorms: rain with lightning and thunder. If you can hear thunder, you're close enough to be struck, so head indoors.");
+  if (/in vicinity/.test(s)) out.push("\"In vicinity\" means it's nearby (within about 5 to 10 miles) but not right at the station.");
+  if (/freezing rain|freezing drizzle/.test(s)) out.push("Freezing rain falls as liquid and freezes on contact, glazing roads and trees in ice.");
+  else if (/sleet|ice pellets/.test(s)) out.push("Sleet is rain that freezes into little ice pellets before it lands. It bounces.");
+  if (/blowing snow/.test(s)) out.push("Blowing snow: wind lifting snow off the ground, which can cut visibility even when no new snow is falling.");
+  else if (/snow shower/.test(s)) out.push("Snow showers start and stop quickly and can be heavy for a short time.");
+  else if (/flurr/.test(s)) out.push("Flurries are light, short snowfalls that add up to little or nothing.");
+  else if (/snow/.test(s)) out.push("Snow falls from clouds cold enough for ice crystals all the way down.");
+  if (/drizzle/.test(s) && !/freezing/.test(s)) out.push("Drizzle is very fine, light rain from low clouds. The drops are tiny and fall slowly, more of a mist than a shower.");
+  if (/shower/.test(s) && !/snow shower/.test(s)) out.push("Showers start and stop suddenly and can change in strength fast, from bubbly clouds. Rain (without \"showers\") is steadier and longer-lasting, from wide, flat cloud layers.");
+  else if (/rain/.test(s) && !/freezing/.test(s)) out.push("Rain without \"showers\" means steady rain from a wide layer of cloud, often lasting hours.");
+  if (/light/.test(s) && /rain|snow|drizzle/.test(s)) out.push("\"Light\" means it's falling slowly: under about a tenth of an inch an hour for rain.");
+  if (/heavy/.test(s)) out.push("\"Heavy\" means it's coming down hard: over about 0.3 inch an hour for rain.");
+  if (/fog/.test(s) && /freezing fog/.test(s)) out.push("Freezing fog leaves a coat of frost on everything it touches.");
+  else if (/fog/.test(s)) out.push("Fog is a cloud touching the ground. It counts as fog when you can't see 5/8 of a mile.");
+  if (/mist/.test(s)) out.push("Mist is a thin fog: tiny water droplets, but you can still see more than 5/8 of a mile.");
+  if (/haze/.test(s)) out.push("Haze is dry: tiny bits of dust, salt, smoke or pollution scattering light and making far-off things look milky or blue-gray. Unlike fog, it isn't water droplets.");
+  if (/smoke/.test(s)) out.push("Smoke from fires is in the air, usually wildfires, sometimes far away. Check the air quality.");
+  if (/dust|sand/.test(s)) out.push("Wind is lifting dust or sand into the air.");
+  if (/breezy/.test(s)) out.push("\"Breezy\" means wind of about 15 to 25 mph.");
+  if (/windy/.test(s)) out.push("\"Windy\" means wind of about 20 to 30 mph or more.");
+  if (/frost/.test(s)) out.push("Frost: ice crystals forming on cold surfaces overnight.");
+  if (/fair/.test(s)) out.push("\"Fair\" is what weather stations report for few or no clouds and no rain.");
+  if (/then/.test(s)) out.push("\"Then\" means the first condition comes first and changes to the second later in the period.");
+  const rung = skyRung(s);
+  if (rung >= 0) out.push(`Sky cover: ${SKY_LADDER[rung][2].toLowerCase()}.`);
+  if (/partly sunny|partly cloudy/.test(s)) out.push("Partly sunny and partly cloudy mean the same amount of cloud. Forecasters use \"partly sunny\" in the daytime and \"partly cloudy\" at night or when they want to stress the clouds.");
+  if (/mostly cloudy/.test(s)) out.push("Mostly cloudy has more cloud than partly sunny: you'll see the sun only now and then.");
+  return out.join(" ") || "A short description of the sky and any rain, snow or fog.";
+}
+
 const TERMS = {
+  sky: {
+    title: "Weather conditions",
+    aka: "The one or two words that describe the sky",
+    what: "Forecasters use a fixed set of words for how much of the sky is covered by cloud, measured in eighths, and set words for rain, snow and fog. Sunny and clear mean the same amount of cloud: sunny is used in the day and clear at night. The same goes for mostly sunny / mostly clear and partly sunny / partly cloudy.",
+    extra: (arg) => { const on = skyRung(arg ?? lastData?.current?.desc);
+      return `<ul class="scale sky-ladder">${SKY_LADDER.map(([e, name, words], i) => `<li class="${i === on ? "on" : ""}"><span>${coverDot(e)}${name}</span><span>${words}</span></li>`).join("")}</ul>`; },
+    nowLabel: "This one",
+    now: (c, d, arg) => { const desc = arg ?? c.desc; return desc ? `${desc}. ${conditionMeaning(desc)}` : null; }
+  },
   temp: {
     title: "Temperature",
     what: "How warm or cold the air is, measured about 6 feet off the ground in the shade. Thermometers are kept out of the sun because sunlight would heat the thermometer itself, not just the air.",
@@ -1037,14 +1113,14 @@ const TERMS = {
   }
 };
 
-function explain(key) {
+function explain(key, arg) {
   const tm = TERMS[key];
   if (!tm) return;
-  const c = lastData?.current, nowText = c && tm.now ? tm.now(c, lastData) : null;
+  const c = lastData?.current, nowText = c && tm.now ? tm.now(c, lastData, arg) : null;
   $("explainBody").innerHTML = `
     <div><h3 id="explainTitle">${tm.title}</h3>${tm.aka ? `<div class="aka">${esc(tm.aka)}</div>` : ""}</div>
     <p>${esc(tm.what)}</p>
-    ${tm.extra ? tm.extra() : ""}
+    ${tm.extra ? tm.extra(arg) : ""}
     ${nowText ? `<div class="now-box"><div class="k">${tm.nowLabel || "Right now"}</div><p>${esc(nowText)}</p></div>` : ""}
     <button type="button" class="close" id="explainClose">Done</button>`;
   $("explainClose").onclick = () => $("explain").close();
@@ -1052,7 +1128,7 @@ function explain(key) {
   if (!dlg.open) dlg.showModal();
   $("explainBody").scrollTop = 0;
 }
-const TERM_ORDER = ["temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "aqi", "uv", "visibility", "pop", "amount", "trace", "radar", "radarcast", "sunrise", "moon", "station", "forecast", "hourly", "alerts"];
+const TERM_ORDER = ["sky", "temp", "feels", "hilo", "wind", "gusts", "humidity", "dew", "pressure", "aqi", "uv", "visibility", "pop", "amount", "trace", "radar", "radarcast", "sunrise", "moon", "station", "forecast", "hourly", "alerts"];
 function explainAll() {
   const order = TERM_ORDER;
   
@@ -1065,7 +1141,7 @@ function explainAll() {
 }
 document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-term]");
-  if (b) { e.preventDefault(); b.dataset.term === "all" ? explainAll() : explain(b.dataset.term); return; }
+  if (b) { e.preventDefault(); b.dataset.term === "all" ? explainAll() : explain(b.dataset.term, b.dataset.arg); return; }
   if (e.target === $("explain")) $("explain").close();   // tap outside the card closes it
 });
 
@@ -1243,7 +1319,7 @@ function render() {
   <section class="panel now" aria-label="Current conditions">
     <div class="big">${termBtn("temp", t(c.tempC).replace("°", ""))}<sup>°${units}</sup></div>
     <div>
-      <div class="desc">${iconFor(c.desc, c.isDay).replace('class="icon"', 'class="icon lg"')}<span>${esc(c.desc)}</span></div>
+      <div class="desc">${iconFor(c.desc, c.isDay).replace('class="icon"', 'class="icon lg"')}<span>${c.desc ? condBtn(c.desc) : ""}</span></div>
       ${c.feelsC != null && Math.abs(c.feelsC - c.tempC) >= 1 ? `<div class="feels">${termBtn("feels", "Feels like")} ${t(c.feelsC)}</div>` : ""}
       ${(() => { const hl = [d.days[0]?.hiC != null && "High " + t(d.days[0].hiC), d.days[0]?.loC != null && "Low " + t(d.days[0].loC)].filter(Boolean).join(" · "); return hl ? `<div class="feels">${termBtn("hilo", hl)}</div>` : ""; })()}
     </div>
@@ -1283,7 +1359,7 @@ function render() {
       <div class="day">
         <div class="name">${esc(x.name)}</div>
         ${iconFor(x.desc, x.isDay !== false)}
-        <div class="short">${esc(x.desc)}${x.pop ? ` <span class="pop">· ${x.pop}%${amount(x.rainMm) ? `, ${traceTap(amount(x.rainMm))}` : ""}${amount(x.snowMm, true) ? `, ${traceTap(amount(x.snowMm, true))} snow` : ""}</span>` : ""}</div>
+        <div class="short">${x.desc ? condBtn(x.desc) : ""}${x.pop ? ` <span class="pop">· ${x.pop}%${amount(x.rainMm) ? `, ${traceTap(amount(x.rainMm))}` : ""}${amount(x.snowMm, true) ? `, ${traceTap(amount(x.snowMm, true))} snow` : ""}</span>` : ""}</div>
         <div class="range">${x.hiC != null ? t(x.hiC) : ""}${x.loC != null ? ` <span class="lo">${t(x.loC)}</span>` : ""}</div>
         ${x.detail || x.nightDetail ? `<details><summary>Forecaster notes</summary><p>${termBtn("forecast", "Who writes these?")}</p>${x.detail ? `<p>${esc(x.detail)}</p>` : ""}${x.nightDetail ? `<p>Night: ${esc(x.nightDetail)}</p>` : ""}</details>` : ""}
       </div>`).join("")}</div>
