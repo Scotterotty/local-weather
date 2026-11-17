@@ -176,8 +176,8 @@ const DJ_ICON = {
   play: `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 1.2v9.6L10.5 6z" fill="currentColor"/></svg>`,
   pause: `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.2 1.5h2.8v9H2.2zM7 1.5h2.8v9H7z" fill="currentColor"/></svg>`
 };
-const SKY_NOW = { storm: "the storm", rain: "the rain", snow: "the snow", fog: "the fog", cloudy: "cloudy skies", partly: "partly cloudy skies", clear: "clear skies" };
-const SKY_WORD = { storm: "stormy", rain: "rainy", snow: "snowy", fog: "foggy", cloudy: "cloudy", partly: "partly cloudy", clear: "clear" };
+const SKY_NOW = { storm: "the storm", rain: "the rain", snow: "the snow", fog: "haze or fog", cloudy: "cloudy skies", partly: "partly cloudy skies", clear: "clear skies" };
+const SKY_WORD = { storm: "stormy", rain: "rainy", snow: "snowy", fog: "hazy or foggy", cloudy: "cloudy", partly: "partly cloudy", clear: "clear" };
 async function renderDJ() {
   const el = $("dj");
   if (!el) return;
@@ -194,11 +194,14 @@ async function renderDJ() {
     body = `<p>Plays a playlist for the weather right now on your phone's Spotify, and switches it when the sky changes (after the song that's playing ends).</p>
       <div class="dj-row"><button type="button" class="dj-go" id="djStart">Start Weather DJ</button><button type="button" id="djForget">Disconnect</button></div>`;
   } else {
-    const p = await spotify("GET", "/me/player").catch(() => null);
-    let playing = !!(p && p.is_playing && p.context?.uri === dj.context);
-    if (!playing) dj = await djRefreshPick(dj);
+    const p = await spotify("GET", "/me/player").catch(() => undefined);   // undefined = couldn't reach Spotify
+    const playing = !!(p && p.is_playing && p.context?.uri === dj.context);
+    // Only re-pick when Spotify clearly isn't playing our playlist. If Spotify couldn't be reached, don't touch it,
+    // or the background switcher would stop recognizing the music that's playing.
+    if (!playing && p !== undefined) dj = await djRefreshPick(dj);
     const id = (dj.context || "").split(":").pop();
     body = `<p><b>On.</b> ${playing ? "Playing" : "Ready to play"} <b>${esc(dj.playlistName || "a weather playlist")}</b> for ${esc(SKY_NOW[dj.sky] || "the weather right now")}.${playing && p.item ? ` Now: ${esc(p.item.name)} · ${esc((p.item.artists || []).map((a) => a.name).join(", "))}.` : ""} Changes only when the conditions outside change (checked about every 15 minutes).</p>
+      ${dj.lastCheck ? `<p class="hint">Last check ${esc(fmtTime(new Date(dj.lastCheck.at)))}${dj.lastCheck.sky ? `: ${esc(SKY_WORD[dj.lastCheck.sky] || dj.lastCheck.sky)}` : ""}, ${esc(dj.lastCheck.what)}.</p>` : ""}
       <div class="dj-row">${playing ? `<button type="button" class="dj-go dj-pp" id="djPause">${DJ_ICON.pause}Pause</button>` : `<button type="button" class="dj-go dj-pp" id="djPlay">${DJ_ICON.play}Play</button>`}<button type="button" id="djStart">New playlist</button><button type="button" id="djStop">Turn off</button></div>
       ${id ? `<p class="hint"><a href="https://open.spotify.com/playlist/${esc(id)}" target="_blank" rel="noopener">Open this playlist in Spotify</a> to follow or save it.</p>` : ""}`;
   }

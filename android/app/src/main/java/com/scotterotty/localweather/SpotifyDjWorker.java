@@ -112,14 +112,14 @@ public class SpotifyDjWorker extends Worker {
     private static void check(Context ctx, JSONObject dj) throws Exception {
         JSONObject p = ourPlayback(ctx, dj);
         double[] loc = WidgetUpdateWorker.location(ctx);
-        if (loc == null) return;
+        if (loc == null) { log(ctx, dj, "", "no location yet"); return; }
 
         String sky = skyNow(ctx, loc[0], loc[1]);
         String part = partOfDay(Calendar.getInstance().get(Calendar.HOUR_OF_DAY));
         String mood = sky + "/" + part;
-        String oldMood = dj.optString("mood", "");
+        String oldSky = dj.optString("sky", "");
         // Only a change in the current conditions changes the music (not the time of day, not forecast chances).
-        if (sky.equals(dj.optString("sky"))) { dj.remove("pending"); save(ctx, dj); return; }
+        if (sky.equals(oldSky)) { dj.remove("pending"); log(ctx, dj, sky, "same as before, no change"); return; }
 
         if (p == null) {
             // Nothing of ours is playing: just keep the ready-to-play pick current, so Play starts the right music.
@@ -127,7 +127,7 @@ public class SpotifyDjWorker extends Worker {
             JSONObject bySky = styles == null ? null : styles.optJSONObject(sky);
             String query = bySky == null ? null : bySky.optString(part, null);
             JSONObject pl = query == null ? null : findPlaylist(ctx, dj, query, dj.optString("context"));
-            if (pl == null) return;
+            if (pl == null) { log(ctx, dj, sky, "changed, but no playlist found"); return; }
             dj.put("context", pl.getString("uri"));
             dj.put("playlistName", pl.optString("name"));
             dj.put("sky", sky);
@@ -135,21 +135,20 @@ public class SpotifyDjWorker extends Worker {
             dj.put("mood", mood);
             dj.remove("pending");
             dj.remove("next");
-            save(ctx, dj);
+            log(ctx, dj, sky, "changed; nothing playing, so the next Play uses " + pl.optString("name"));
             return;
         }
 
         // Rain, snow or storms starting or stopping switches right away. A change between sunny, partly cloudy and
         // cloudy has to show up on two checks in a row, so one passing cloud doesn't change the music.
-        String oldSky = oldMood.contains("/") ? oldMood.substring(0, oldMood.indexOf('/')) : "";
-        boolean sure = wet(sky) || wet(oldSky) || sky.equals(oldSky);
-        if (!sure && !mood.equals(dj.optString("pending"))) { dj.put("pending", mood); save(ctx, dj); return; }
+        boolean sure = wet(sky) || wet(oldSky);
+        if (!sure && !sky.equals(dj.optString("pending"))) { dj.put("pending", sky); log(ctx, dj, sky, "changed; confirming on the next check"); return; }
 
         JSONObject styles = dj.optJSONObject("styles");
         String query = styles == null ? null : styles.optJSONObject(sky) == null ? null : styles.getJSONObject(sky).optString(part, null);
-        if (query == null) return;
+        if (query == null) { log(ctx, dj, sky, "changed, but no style for it"); return; }
         JSONObject pl = findPlaylist(ctx, dj, query, dj.optString("context"));
-        if (pl == null) return;
+        if (pl == null) { log(ctx, dj, sky, "changed, but no playlist found"); return; }
 
         JSONObject item = p.optJSONObject("item");
         long left = item == null ? 0 : item.optLong("duration_ms") - p.optLong("progress_ms");
@@ -157,7 +156,7 @@ public class SpotifyDjWorker extends Worker {
             .put("sky", sky).put("part", part).put("track", item == null ? "" : item.optString("id"));
         dj.put("next", next);
         dj.remove("pending");
-        save(ctx, dj);
+        log(ctx, dj, sky, "changed; switching to " + pl.optString("name") + " when this song ends");
         scheduleSwitch(ctx, left - 1500);   // just before the song ends; doSwitch waits if it's early
     }
 
@@ -165,7 +164,7 @@ public class SpotifyDjWorker extends Worker {
         JSONObject next = dj.optJSONObject("next");
         if (next == null) return;
         JSONObject p = ourPlayback(ctx, dj);
-        if (p == null) { dj.remove("next"); save(ctx, dj); return; }   // you paused or changed the music: leave it alone
+        if (p == null) { dj.remove("next"); log(ctx, dj, next.optString("sky"), "switch skipped: music was paused or changed"); return; }   // leave your music alone
         JSONObject item = p.optJSONObject("item");
         long left = item == null ? 0 : item.optLong("duration_ms") - p.optLong("progress_ms");
         if (item != null && item.optString("id").equals(next.optString("track")) && left > 4000) {
@@ -182,6 +181,12 @@ public class SpotifyDjWorker extends Worker {
         dj.put("part", next.optString("part"));
         dj.put("mood", next.optString("sky") + "/" + next.optString("part"));
         dj.remove("next");
+        log(ctx, dj, next.optString("sky"), "switched to " + next.optString("name"));
+    }
+
+    /** Remember the last decision so the app can show it ("Last check 10:15 AM: haze, switching…"). Also saves. */
+    private static void log(Context ctx, JSONObject dj, String sky, String what) {
+        try { dj.put("lastCheck", new JSONObject().put("at", System.currentTimeMillis()).put("sky", sky).put("what", what)); } catch (Exception ignored) { }
         save(ctx, dj);
     }
 

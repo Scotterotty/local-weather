@@ -13,9 +13,10 @@ function skyKind(desc) {
   if (/thunder|t-storm/.test(s)) return "storm";
   if (/snow|sleet|flurr|ice|freezing/.test(s)) return "snow";
   if (/rain|shower|drizzle/.test(s)) return "rain";
-  if (/fog|haze|smoke|mist/.test(s)) return "fog";
-  if (/overcast|^cloudy|mostly cloudy/.test(s)) return "cloudy";
-  if (/partly|few clouds/.test(s)) return "partly";
+  // Kept in step with WidgetUpdateWorker.kind() on Android, so the app and the background DJ agree.
+  if (/fog|haze|smoke|mist|dust/.test(s)) return "fog";
+  if (/partly|partial|scattered clouds|few clouds/.test(s)) return "partly";
+  if (/cloud|overcast/.test(s) && !/mostly (sunny|clear)/.test(s)) return "cloudy";
   return "clear";
 }
 const WET = ["storm", "rain", "snow"];
@@ -50,7 +51,8 @@ function possibleNote(hours, sky) {
   const wet = hours.filter((h) => WET.includes(skyKind(h.desc)) && (h.pop || 0) >= 20);
   if (!wet.length) return "";
   const k = wet.some((h) => skyKind(h.desc) === "storm") ? "storms" : wet.some((h) => skyKind(h.desc) === "snow") ? "snow" : "showers";
-  return ` · ${k} possible (${Math.max(...wet.map((h) => h.pop || 0))}%)`;
+  const top = Math.max(...wet.map((h) => h.pop || 0));
+  return ` · ${k} ${top >= 50 ? "likely for part of it" : "possible"} (${top}%)`;
 }
 
 // Style, a few artists to start with, and why it fits. Keyed by sky, then part of day ("any" = all parts).
