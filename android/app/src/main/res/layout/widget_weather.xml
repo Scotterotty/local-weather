@@ -71,6 +71,9 @@
         <TextView android:id="@+id/d2" style="@style/WText" android:layout_width="0dp" android:layout_weight="1" android:gravity="center" android:textSize="12sp" />
     </LinearLayout>
 
+    <TextView android:id="@+id/w_music" style="@style/WText" android:layout_width="match_parent" android:layout_marginTop="6dp"
+        android:maxLines="1" android:ellipsize="end" android:textColor="@color/widget_music" android:textSize="12sp" android:visibility="gone" />
+
     <TextView android:id="@+id/w_note" style="@style/WText" android:layout_width="match_parent" android:layout_marginTop="6dp"
         android:ellipsize="end" android:textColor="@color/widget_note" android:textSize="12sp" android:visibility="gone" />
 

@@ -120,6 +120,7 @@ public class WidgetUpdateWorker extends Worker {
             s.lon = loc[1];
             s.time = System.currentTimeMillis();
             s.save(ctx);
+            SpotifyDjWorker.refreshNowPlaying(ctx);   // only if the Weather DJ is on
             render(ctx, s, null);
             return true;
         } catch (Exception e) {
@@ -468,6 +469,30 @@ public class WidgetUpdateWorker extends Worker {
         b.setSpan(new ForegroundColorSpan(color), at, at + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
     }
 
+    /** {text, link} for the widget's music line, or null when the Weather DJ is off. */
+    static String[] musicLine(Context ctx, long now) {
+        try {
+            String raw = ctx.getSharedPreferences(APP_PREFS, Context.MODE_PRIVATE).getString("lw.dj", null);
+            if (raw == null) return null;
+            JSONObject dj = new JSONObject(raw);
+            if (!dj.optBoolean("on") || dj.optString("refresh", "").isEmpty()) return null;
+            String ctxUri = dj.optString("context", ""), name = dj.optString("playlistName", "");
+            if (ctxUri.isEmpty()) return null;
+            String link = ctxUri.startsWith("spotify:playlist:")
+                ? "https://open.spotify.com/playlist/" + ctxUri.substring("spotify:playlist:".length()) : null;
+            JSONObject np = dj.optJSONObject("nowPlaying");
+            boolean playing = np != null && np.optBoolean("playing") && ctxUri.equals(np.optString("context"))
+                && now - np.optLong("at") < 45 * 60000L;
+            String track = np == null ? "" : np.optString("track", "");
+            if (playing && !track.isEmpty() && np.optLong("endsAt") > now) {
+                String artists = np.optString("artists", "");
+                return new String[] { "♫ " + track + (artists.isEmpty() ? "" : " · " + artists), link };
+            }
+            if (name.isEmpty()) name = "your Weather DJ playlist";
+            return new String[] { "♫ " + name + (playing ? "" : " · ready"), link };
+        } catch (Exception e) { return null; }
+    }
+
     // ---------- rendering ----------
     static void renderCached(Context ctx) {
         Snapshot s = Snapshot.load(ctx);
@@ -506,6 +531,7 @@ public class WidgetUpdateWorker extends Worker {
             v.setViewVisibility(R.id.w_hours, gone);
             v.setViewVisibility(R.id.w_days, gone);
             v.setViewVisibility(R.id.w_note, gone);
+            v.setViewVisibility(R.id.w_music, gone);
             v.setTextViewText(R.id.w_sky, "");
         } else {
             // Day/night and dusk from the sun's position at this spot
@@ -579,13 +605,27 @@ public class WidgetUpdateWorker extends Worker {
             v.setTextViewText(R.id.w_note, s.note != null ? s.note : "");
 
             // Fit the optional rows to the widget's height (about 170 dp for the rest). Alerts win over the 3-day strip.
+            // Weather DJ: the song playing, or the playlist it picked
+            String[] music = musicLine(ctx, now);
+            if (music != null) {
+                v.setTextViewText(R.id.w_music, music[0]);
+                if (music[1] != null) {
+                    Intent sp = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(music[1])).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    v.setOnClickPendingIntent(R.id.w_music, PendingIntent.getActivity(ctx, 2, sp, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+                }
+            }
+
+            // Fit the optional rows to the widget's height (about 170 dp for the rest).
+            // Priority: weather alert, then music, then the 3-day strip, then the rain outlook.
             int spare = heightDp - 170;
-            boolean showNote = false, showDays = false;
+            boolean showNote = false, showDays = false, showMusic = false;
             if (s.note != null && s.noteAlert && spare >= 22) { showNote = true; spare -= 22; }
+            if (music != null && spare >= 22) { showMusic = true; spare -= 22; }
             if (days > 0 && spare >= 24) { showDays = true; spare -= 24; }
             if (s.note != null && !showNote && spare >= 22) showNote = true;
             v.setViewVisibility(R.id.w_days, showDays ? shown : gone);
             v.setViewVisibility(R.id.w_note, showNote ? shown : gone);
+            v.setViewVisibility(R.id.w_music, showMusic ? shown : gone);
 
             // Sun and moon, calculated on the phone
             StringBuilder sky = new StringBuilder();

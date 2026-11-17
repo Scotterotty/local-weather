@@ -93,6 +93,8 @@ public class SpotifyDjWorker extends Worker {
         try {
             if (getInputData().getBoolean("switch", false)) doSwitch(ctx, dj);
             else check(ctx, dj);
+            save(ctx, dj);
+            WidgetUpdateWorker.renderCached(ctx);   // show the playlist/song on the widget
             return Result.success();
         } catch (Exception e) {
             return getRunAttemptCount() < 2 ? Result.retry() : Result.success();
@@ -102,11 +104,40 @@ public class SpotifyDjWorker extends Worker {
     /** Is Spotify playing the DJ's playlist? Returns the player state, or null if not (paused, or you picked something else). */
     private static JSONObject ourPlayback(Context ctx, JSONObject dj) throws Exception {
         Http r = api(ctx, dj, "GET", "/me/player", null);
-        if (r.code == 204 || r.body.isEmpty()) return null;
+        if (r.code == 204 || r.body.isEmpty()) { noteNowPlaying(dj, null, false); return null; }
+        if (r.code >= 300) return null;
         JSONObject p = new JSONObject(r.body);
         JSONObject c = p.optJSONObject("context");
-        if (!p.optBoolean("is_playing") || c == null || !c.optString("uri").equals(dj.optString("context"))) return null;
-        return p;
+        boolean ours = p.optBoolean("is_playing") && c != null && c.optString("uri").equals(dj.optString("context"));
+        noteNowPlaying(dj, p, ours);
+        return ours ? p : null;
+    }
+
+    /** Remember what's playing so the widget can show it (song, artist, and when it ends). Callers save. */
+    private static void noteNowPlaying(JSONObject dj, JSONObject p, boolean ours) {
+        try {
+            JSONObject np = new JSONObject().put("at", System.currentTimeMillis()).put("playing", ours);
+            JSONObject item = p == null ? null : p.optJSONObject("item");
+            if (ours && item != null) {
+                StringBuilder artists = new StringBuilder();
+                JSONArray a = item.optJSONArray("artists");
+                for (int i = 0; a != null && i < a.length() && i < 2; i++) {
+                    if (i > 0) artists.append(", ");
+                    artists.append(a.getJSONObject(i).optString("name"));
+                }
+                np.put("track", item.optString("name")).put("artists", artists.toString())
+                  .put("endsAt", System.currentTimeMillis() + item.optLong("duration_ms") - p.optLong("progress_ms"))
+                  .put("context", dj.optString("context"));
+            }
+            dj.put("nowPlaying", np);
+        } catch (Exception ignored) { }
+    }
+
+    /** One small player check for the widget, piggybacked on its regular refresh. No extra polling. */
+    static void refreshNowPlaying(Context ctx) {
+        JSONObject dj = load(ctx);
+        if (!dj.optBoolean("on") || dj.optString("refresh", "").isEmpty()) return;
+        try { ourPlayback(ctx, dj); save(ctx, dj); } catch (Exception ignored) { }
     }
 
     private static void check(Context ctx, JSONObject dj) throws Exception {
@@ -180,6 +211,7 @@ public class SpotifyDjWorker extends Worker {
         dj.put("part", next.optString("part"));
         dj.put("mood", next.optString("sky") + "/" + next.optString("part"));
         dj.remove("next");
+        dj.put("nowPlaying", new JSONObject().put("at", System.currentTimeMillis()).put("playing", true).put("context", uri));
         log(ctx, dj, next.optString("sky"), "switched to " + next.optString("name"));
     }
 

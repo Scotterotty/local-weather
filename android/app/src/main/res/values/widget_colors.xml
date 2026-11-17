@@ -4,5 +4,6 @@
     <color name="widget_muted">#D9FFFFFF</color>
     <color name="widget_rain">#FFB3E0FF</color>
     <color name="widget_note">#FFFFE08A</color>
+    <color name="widget_music">#FFA8F0C0</color>
     <color name="widget_chip">#26FFFFFF</color>
 </resources>
