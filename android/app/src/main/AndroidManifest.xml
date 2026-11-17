@@ -44,6 +44,11 @@
                 android:resource="@xml/weather_widget_info" />
         </receiver>
 
+        <!-- Widget refresh: idle-friendly alarm and tap-to-refresh -->
+        <receiver
+            android:name=".WidgetRefreshReceiver"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

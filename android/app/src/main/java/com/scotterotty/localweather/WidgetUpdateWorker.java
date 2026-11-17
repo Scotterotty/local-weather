@@ -75,9 +75,11 @@ public class WidgetUpdateWorker extends Worker {
     }
 
     public static void schedulePeriodic(Context ctx) {
-        PeriodicWorkRequest req = new PeriodicWorkRequest.Builder(WidgetUpdateWorker.class, 30, TimeUnit.MINUTES)
+        // 15 minutes is Android's shortest period. Android can still delay it (battery saving), which is why
+        // WidgetRefreshReceiver also sets an alarm that is allowed to fire while the phone is idle.
+        PeriodicWorkRequest req = new PeriodicWorkRequest.Builder(WidgetUpdateWorker.class, 15, TimeUnit.MINUTES)
             .setConstraints(net()).build();
-        WorkManager.getInstance(ctx).enqueueUniquePeriodicWork(PERIODIC, ExistingPeriodicWorkPolicy.KEEP, req);
+        WorkManager.getInstance(ctx).enqueueUniquePeriodicWork(PERIODIC, ExistingPeriodicWorkPolicy.UPDATE, req);
     }
 
     public static void cancelPeriodic(Context ctx) {
@@ -93,11 +95,17 @@ public class WidgetUpdateWorker extends Worker {
     @NonNull
     @Override
     public Result doWork() {
-        Context ctx = getApplicationContext();
+        boolean ok = update(getApplicationContext());
+        return ok || getRunAttemptCount() >= 2 ? Result.success() : Result.retry();
+    }
+
+    /** Fetch and redraw. Used by WorkManager and by the alarm/tap receiver. Returns false on a network failure. */
+    static boolean update(Context ctx) {
+        WidgetRefreshReceiver.scheduleNext(ctx);   // keep the alarm chain going whatever happens below
         double[] loc = location(ctx);
         if (loc == null) {
             render(ctx, null, "Open the app once to set your location");
-            return Result.success();
+            return true;
         }
         try {
             Snapshot s;
@@ -113,10 +121,10 @@ public class WidgetUpdateWorker extends Worker {
             s.time = System.currentTimeMillis();
             s.save(ctx);
             render(ctx, s, null);
-            return Result.success();
+            return true;
         } catch (Exception e) {
             renderCached(ctx);
-            return getRunAttemptCount() < 2 ? Result.retry() : Result.success();
+            return false;
         }
     }
 
@@ -515,7 +523,7 @@ public class WidgetUpdateWorker extends Worker {
             if (s.loC != null) hl.append(hl.length() > 0 ? "  " : "").append("L ").append(fmt(s.loC, useC));
             v.setTextViewText(R.id.w_hilo, hl.toString());
             String when = DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date(s.time));
-            v.setTextViewText(R.id.w_updated, (s.station != null ? s.station + " · " : "") + when);
+            v.setTextViewText(R.id.w_updated, (s.station != null ? s.station + " · " : "") + when + "  ↻");
 
             // Wind, humidity, air quality and UV, with a colored dot for the level (same colors as the app)
             SpannableStringBuilder air = new SpannableStringBuilder();
@@ -592,6 +600,8 @@ public class WidgetUpdateWorker extends Worker {
         Intent open = new Intent(ctx, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pi = PendingIntent.getActivity(ctx, 0, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         v.setOnClickPendingIntent(R.id.w_root, pi);
+        // Tap the time in the corner to refresh right away
+        v.setOnClickPendingIntent(R.id.w_updated, WidgetRefreshReceiver.tapIntent(ctx));
         return v;
     }
 

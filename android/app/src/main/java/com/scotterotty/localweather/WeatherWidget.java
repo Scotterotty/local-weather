@@ -26,5 +26,6 @@ public class WeatherWidget extends AppWidgetProvider {
     @Override
     public void onDisabled(Context context) {
         WidgetUpdateWorker.cancelPeriodic(context);
+        WidgetRefreshReceiver.cancel(context);
     }
 }
