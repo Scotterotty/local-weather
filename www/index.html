@@ -98,6 +98,47 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .term.cond { font: inherit; color: inherit; text-align: left; }
 .sky-ladder .cover { width: 1.5em; height: 1.5em; vertical-align: -.2em; margin-right: 8px; flex: none; }
 .sky-ladder li > span:first-child { display: inline-flex; align-items: center; }
+/* Your weather (favorite.js) */
+.fav-intro { margin: 0 0 10px; color: var(--muted); max-width: 60ch; }
+.fav-pick .chip .icon { width: 22px; height: 22px; }
+.fav-title { display: flex; align-items: center; gap: 10px; font: 600 1.6rem/1.15 var(--display); color: var(--accent); }
+.fav-title #favChange { margin-left: auto; }
+.fav-cd { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border-radius: 12px; padding: 10px 14px; margin: 12px 0 8px; }
+.fav-cd b { font-weight: 600; }
+.fav-sub { display: block; font-size: .8rem; color: var(--muted); }
+.fav-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; text-align: center; }
+.fav-day { border-radius: 10px; padding: 6px 0; }
+.fav-day .k { font-size: .72rem; color: var(--muted); }
+.fav-day .icon { width: 24px; height: 24px; }
+.fav-day .v { font: 600 .85rem var(--display); color: var(--muted); font-variant-numeric: tabular-nums; }
+.fav-day.some .v { color: var(--fg); }
+.fav-day.on { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.fav-day.on .v { color: var(--accent); }
+.fav-note { font-size: .78rem; color: var(--muted); margin: 6px 0 0; max-width: 65ch; }
+.fav-streak { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; }
+.fav-head { font: 500 1.15rem/1.3 var(--display); }
+.fav-head b { font-weight: 600; color: var(--accent); }
+.fav-strip { display: flex; gap: 4px; margin: 10px 0 2px; }
+.fav-dot { flex: 1 1 0; height: 14px; border-radius: 4px; background: color-mix(in srgb, var(--muted) 22%, transparent); }
+.fav-dot.yes { background: var(--accent); }
+.fav-dot.unk { background: repeating-linear-gradient(135deg, transparent 0 3px, color-mix(in srgb, var(--muted) 30%, transparent) 3px 5px); }
+.fav-dot.today { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+.fav-legend { display: flex; justify-content: space-between; font-size: .7rem; color: var(--muted); }
+.fav-how { margin-top: 8px; font-size: .85rem; }
+.fav-how summary { cursor: pointer; color: var(--accent); font-size: .82rem; }
+.fav-how p { margin: 6px 0 0; max-width: 65ch; }
+.fav .alm-sec:first-of-type { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
+.fav-clues { display: grid; gap: 10px; }
+.fav-clue { display: grid; grid-template-columns: 18px 1fr; gap: 8px; }
+.fav-clue p { margin: 2px 0 0; font-size: .9rem; }
+.fav-clue .k { font-size: .82rem; color: var(--muted); }
+.fav-clue .v { color: var(--fg); font-weight: 600; }
+.fav-clue .sr { font-size: .72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+.fav-mark { font-size: .8rem; line-height: 1.6; }
+.fav-clue.up .fav-mark, .fav-clue.up .sr { color: var(--accent); }
+.fav-clue.down .fav-mark, .fav-clue.down .sr { color: var(--warm); }
+.fav-clue.flat .fav-mark, .fav-clue.flat .sr { color: var(--muted); }
+.fav-watch { margin: 0; padding-left: 1.1em; display: grid; gap: 4px; max-width: 65ch; }
 .aqi-dot { display: inline-block; width: .7em; height: .7em; border-radius: 50%; margin-right: 6px; vertical-align: .05em; box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 20%, transparent); }
 .stat .v { font-size-adjust: var(--display-adjust, none); }
 .now .big { font: 500 5rem/1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
@@ -538,6 +579,7 @@ async function loadNWS(lat, lon) {
       pressureHpa: o.barometricPressure?.value != null ? o.barometricPressure.value / 100 : null, pressure3hAgo,
       visKm: o.visibility?.value != null ? o.visibility.value / 1000 : null,
       observedAt: new Date(o.timestamp), station: `${obs.st.name} (${obs.st.stationIdentifier})`, stationKm: obs.km,
+      stationId: obs.st.stationIdentifier, stationName: obs.st.name,
       official: /^[KP][A-Z0-9]{3}$/.test(obs.st.stationIdentifier),
       isDay: h0.isDaytime
     };
@@ -573,6 +615,7 @@ async function loadNWS(lat, lon) {
     source: "National Weather Service",
     sourceNote: `NWS ${p.gridId} forecast office · grid ${p.gridX},${p.gridY}`,
     sourceLink: `https://forecast.weather.gov/MapClick.php?lat=${lat}&lon=${lon}`,
+    timeZone: p.timeZone || null,
     current: cur, hourly, days: days.slice(0, 7),
     alerts: (alerts?.features || []).map((f) => f.properties).map((a) => ({
       event: a.event, headline: a.headline, severity: a.severity,
@@ -621,7 +664,7 @@ async function loadOpenMeteo(lat, lon) {
   });
   return {
     place: null, source: "Open-Meteo", sourceNote: "Best available model for this location",
-    sourceLink: "https://open-meteo.com/",
+    sourceLink: "https://open-meteo.com/", timeZone: d.timezone || null,
     current: {
       tempC: c.temperature_2m, feelsC: c.apparent_temperature, desc: WMO[c.weather_code] || "",
       humidity: c.relative_humidity_2m, dewC: c.dew_point_2m, windKmh: c.wind_speed_10m,
@@ -1365,11 +1408,13 @@ function render() {
       </div>`).join("")}</div>
   </section>
 
+  <div id="favSlot"></div>
   <div id="wordSlot"></div>
   <div id="soundtrackSlot"></div>
   <div id="almanacSlot"></div>`;
 
   mountRadar();
+  if (typeof mountFav === "function") mountFav();
   if (typeof mountWord === "function") mountWord();
   if (typeof mountSoundtrack === "function") mountSoundtrack();
   if (typeof mountAlmanac === "function") mountAlmanac();
@@ -1537,6 +1582,7 @@ locate();
 </script>
 <script src="almanac.js?v=__V__"></script>
 <script src="wordofday.js?v=__V__"></script>
+<script src="favorite.js?v=__V__"></script>
 <script src="soundtrack.js?v=__V__"></script>
 <script src="dj.js?v=__V__"></script>
 </body>
