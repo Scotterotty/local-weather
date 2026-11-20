@@ -228,7 +228,7 @@ function almanacPanel() {
 // Collapsible sections. Each one's open or closed state is remembered on this device.
 // The big optional sections start closed, with a one-line peek in their header; the parts inside them start open
 // unless they're listed here, so opening a section shows its main part without a wall of text.
-const SEC_START_CLOSED = new Set(["almanac", "fav", "word", "nightsky", "music", "radar", "nowmore",
+const SEC_START_CLOSED = new Set(["almanac", "fav", "word", "nightsky", "music", "radar", "nowmore", "music-later",
   "frost", "garden", "birds", "sayings", "skyspots", "skyplanets", "skystars", "skyiss"]);
 const secOpen = (key) => {
   const s = store.get("lw.secs") || {};

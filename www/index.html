@@ -318,6 +318,9 @@ body { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 .tn-row .tv { text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tn-row .tv .rate { font-size: .72rem; }
 .tn-row:focus-visible { outline: 2px solid var(--accent); border-radius: 6px; }
+.track-later { margin-top: 12px; }
+.track-later > summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: .88rem; }
+.track-later[open] > summary { margin-bottom: 12px; }
 .fav-badge { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: .7rem; font-weight: 600; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); vertical-align: 1px; white-space: nowrap; }
 .now-more .stats { border-top: 0; padding-top: 4px; }
 .now-more { margin-top: 10px; }

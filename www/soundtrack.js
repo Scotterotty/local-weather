@@ -147,7 +147,7 @@ function soundtrackHtml(d) {
   const parts = dayParts(d.hourly);
   if (!parts.length) return "";
   let peek = "";
-  const rows = parts.map((g) => {
+  const cards = parts.map((g) => {
     // The part of the day you're in now follows the current conditions; later parts follow the forecast.
     const sky = g === parts[0] && g.hours[0].time - Date.now() < 3600e3 ? skyNowFrom(d) : skyOf(g.hours);
     const temps = g.hours.map((h) => h.tempC).filter((x) => x != null);
@@ -168,7 +168,9 @@ function soundtrackHtml(d) {
       <p class="track-pl"></p>
       <p class="track-links"><a class="spotify" data-q="${esc(decodeURIComponent(q))}" data-block="${g.dayKey}/${g.part}" data-sky="${sky}" href="https://open.spotify.com/search/${q}" target="_blank" rel="noopener">Find on Spotify</a><a href="https://music.youtube.com/search?q=${q}" target="_blank" rel="noopener">YouTube Music</a></p>
     </div>`;
-  }).join("");
+  });
+  // The part of the day you're in now, with the rest of today and tomorrow one tap away.
+  const rows = cards[0] + (cards.length > 1 ? `<details class="track-later" data-sec="music-later"${secOpen("music-later")}><summary>Later: ${parts.slice(1).map((g) => esc(g.name.toLowerCase())).join(", ")}</summary><div class="tracks">${cards.slice(1).join("")}</div></details>` : "");
   return `<section class="panel soundtrack" aria-label="Soundtrack for your day">
     <details class="alm-all" data-sec="music"${secOpen("music")}>
       ${secSummary("Soundtrack for your day", peek)}
