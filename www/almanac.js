@@ -225,27 +225,38 @@ function almanacPanel() {
   return el;
 }
 
-// Collapsible sections. Which ones are closed is remembered on this device.
-const closedSecs = () => new Set(store.get("lw.closed") || []);
-const secOpen = (key) => closedSecs().has(key) ? "" : " open";
+// Collapsible sections. Each one's open or closed state is remembered on this device.
+// The big optional sections start closed, with a one-line peek in their header; the parts inside them start open
+// unless they're listed here, so opening a section shows its main part without a wall of text.
+const SEC_START_CLOSED = new Set(["almanac", "fav", "word", "nightsky", "music", "radar",
+  "frost", "garden", "birds", "sayings", "skyspots", "skyplanets", "skystars", "skyiss"]);
+const secOpen = (key) => {
+  const s = store.get("lw.secs") || {};
+  // lw.closed is the older list of sections someone closed; still respected.
+  const open = key in s ? s[key] : !SEC_START_CLOSED.has(key) && !(store.get("lw.closed") || []).includes(key);
+  return open ? " open" : "";
+};
 document.addEventListener("toggle", (e) => {
   const key = e.target?.dataset?.sec;
   if (!key) return;
-  const set = closedSecs();
-  e.target.open ? set.delete(key) : set.add(key);
-  store.set("lw.closed", [...set]);
+  const s = store.get("lw.secs") || {};
+  if (s[key] === e.target.open) return;
+  s[key] = e.target.open;
+  store.set("lw.secs", s);
 }, true);
+// A section header: the title, and a short peek line that shows only while the section is closed.
+const secSummary = (title, peek) => `<summary><div class="sum-t"><h2 class="label">${title}</h2>${peek ? `<div class="peek">${peek}</div>` : ""}</div></summary>`;
 
 function renderAlmanac() {
   const el = almanac.el, d = lastData;
   if (!el || !d) return;
   const now = new Date(), doy = doyOf(now), c = almanac.clim;
   const season = now.toLocaleDateString(undefined, { month: "long" });
-  let html = `<details class="alm-all" data-sec="almanac"${secOpen("almanac")}><summary><h2 class="label">Almanac for ${esc(season)}</h2></summary><div class="alm-body">`;
+  let html = `<details class="alm-all" data-sec="almanac"${secOpen("almanac")}>%%SUMMARY%%<div class="alm-body">`;
 
   if (!c) {
     html += `<p class="hint">${almanac.loading ? "Looking up 20 years of local weather…" : "The almanac needs a connection to load."}</p>`;
-    el.innerHTML = html + `</div></details>`;
+    el.innerHTML = (html + `</div></details>`).replace("%%SUMMARY%%", secSummary(`Almanac for ${esc(season)}`, ""));
     return;
   }
 
@@ -283,19 +294,12 @@ function renderAlmanac() {
   } else html += `<p class="hint">${b ? "No bird sightings recorded near here for this month yet." : "Loading sightings…"}</p>`;
   html += `</details>`;
 
-  // 5. Stars tonight
-  const st = starsTonight(d);
-  html += `<details class="alm-sec" data-sec="stars"${secOpen("stars")}><summary><h3>${termBtn("constellation", "Stars tonight")}</h3></summary>
-    <p><span class="rate rate-${st.rating.toLowerCase()}">${st.rating}</span> for ${termBtn("stargazing", "stargazing")} around ${esc(fmtTime(st.when))}. ${esc(st.why[0])}, and ${esc(st.why[1])}.</p>
-    ${st.visible.length ? `<div class="stars">${st.visible.map((c) => `<div class="star-card">
-      <div class="sc-top"><b>${esc(c.name)}</b><span class="where">${esc(whereToLook(c.pos))}</span></div>
-      <p>${esc(c.find)}</p><p class="fact">${esc(c.fact)}</p></div>`).join("")}</div>` : `<p>No major constellations are well placed right now.</p>`}
-    <p class="hint">Away from streetlights you'll see far more. Give your eyes 15 minutes to adjust, and use red light if you need a flashlight.</p></details>`;
-
-  // 6. Folklore
+  // 5. Folklore
   html += `<details class="alm-sec" data-sec="sayings"${secOpen("sayings")}><summary><h3>Sky and weather sayings</h3></summary>${folklore(d).map((f) => `<div class="lore"><p class="say">“${esc(f.say)}”</p><p><b>Science says:</b> ${esc(f.sci)}</p></div>`).join("")}</details>`;
   html += `</div></details>`;
-  el.innerHTML = html;
+  // Peek: today's normal, and how the coming week compares.
+  const peek = [n ? `Normal ${t(n.hi)} / ${t(n.lo)}` : "", diff != null ? (Math.abs(diff) < 2 ? "week near normal" : `week ${Math.round(Math.abs(diff))}° ${diff > 0 ? "warmer" : "cooler"}`) : ""].filter(Boolean).join(" · ");
+  el.innerHTML = html.replace("%%SUMMARY%%", secSummary(`Almanac for ${esc(season)}`, peek));
 }
 
 async function refreshAlmanac() {

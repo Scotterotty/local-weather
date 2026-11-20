@@ -279,6 +279,10 @@ footer .term { font-size: .8rem; }
 .alm-all > summary::after, .alm-sec > summary::after { content: ""; flex: none; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin: -4px 4px 0 0; transition: transform .2s; }
 .alm-all[open] > summary::after, .alm-sec[open] > summary::after { transform: rotate(-135deg); margin-top: 4px; }
 .alm-all > summary .label { margin: 0; }
+.sum-t { min-width: 0; flex: 1; }
+.sum-t .peek { margin-top: 4px; color: var(--fg); font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sum-t .peek .rate { font-size: .72rem; vertical-align: 1px; }
+.alm-all[open] > summary .peek { display: none; }
 .alm-all[open] > summary { margin-bottom: 10px; }
 .alm-sec p { margin: 0 0 8px; max-width: 65ch; }
 .alm-sec b { font-weight: 600; }
@@ -800,8 +804,8 @@ function radarPanel() {
   const el = document.createElement("section");
   el.className = "panel";
   el.setAttribute("aria-label", "Radar");
-  el.innerHTML = `
-    <h2 class="label">Radar</h2>
+  el.innerHTML = `<details class="alm-all" data-sec="radar" id="radarSec"${typeof secOpen === "function" ? secOpen("radar") : ""}>
+    <summary><div class="sum-t"><h2 class="label">Radar</h2><div class="peek">Past hour and next 6 hours</div></div></summary>
     <div class="radar-modes" role="group" aria-label="Radar time range">
       <button type="button" data-mode="future" aria-pressed="true">Next 6 hours</button>
       <button type="button" data-mode="past" aria-pressed="false">Past hour</button>
@@ -818,7 +822,9 @@ function radarPanel() {
     </div>
     <div class="radar-legend" aria-hidden="true"><div class="ramp"></div>
       <div class="words"><span>Drizzle</span><span>Light rain</span><span>Heavy rain</span><span>Storms</span><span>Hail</span></div></div>
-    <p class="radar-note" id="radarNote" hidden></p>`;
+    <p class="radar-note" id="radarNote" hidden></p></details>`;
+  // Leaflet can't size a map inside a closed section, so size it when the section opens.
+  el.querySelector("#radarSec").addEventListener("toggle", (e) => { if (e.target.open && radar?.map) radar.map.invalidateSize(); });
   radar = { el, map: null, mode: "future", sets: { past: [], future: [] }, idx: 0, timer: null, playing: false, run: null };
   return el;
 }
@@ -1422,8 +1428,6 @@ function render() {
     <div class="obs">${c.station ? `${termBtn("station", "Measured")} at ${esc(c.station)}${c.stationKm != null ? `, ${units === "F" ? Math.round(c.stationKm / 1.609) + " mi" : Math.round(c.stationKm) + " km"} away` : ""}, at ${fmtTime(c.observedAt)}${c.official === false ? " (volunteer station, no airport station reporting nearby)" : ""}` : `Current values from the forecast (${termBtn("station", "no recent station report")} nearby)`}</div>
   </section>
 
-  <div id="radarSlot"></div>
-
   <section class="panel" aria-label="Next 24 hours">
     <h2 class="label">Next 24 hours</h2>
     <div class="hint">${termBtn("hourly", "Temperature line")} · blue % = ${termBtn("pop", "chance of rain")} · inches = ${termBtn("amount", "how much")}</div>
@@ -1451,11 +1455,12 @@ function render() {
       </div>`).join("")}</div>
   </section>
 
+  <div id="radarSlot"></div>
   <div id="favSlot"></div>
   <div id="wordSlot"></div>
   <div id="skySlot"></div>
-  <div id="soundtrackSlot"></div>
-  <div id="almanacSlot"></div>`;
+  <div id="almanacSlot"></div>
+  <div id="soundtrackSlot"></div>`;
 
   mountRadar();
   if (typeof mountFav === "function") mountFav();

@@ -559,7 +559,7 @@ function renderSky() {
   const el = sky.el;
   if (!el || !current || typeof Astronomy === "undefined") return;
   const obs = observer(), now = new Date();
-  let html = `<details class="alm-all" data-sec="nightsky"${secOpen("nightsky")}><summary><h2 class="label">Night sky</h2></summary><div class="alm-body">`;
+  let html = `<details class="alm-all" data-sec="nightsky"${secOpen("nightsky")}>%%SUMMARY%%<div class="alm-body">`;
 
   // Events are slow-ish to work out, so do it once per place per hour.
   const ek = `${current.lat.toFixed(2)},${current.lon.toFixed(2)},${Math.floor(now / 36e5)},${sky.dark ? 1 : 0}`;
@@ -648,7 +648,18 @@ function renderSky() {
     <p class="hint">How to tell a planet from a star: stars twinkle, planets mostly shine steadily.</p>` : `<p>None of the bright planets are well placed tonight. They're too close to the Sun to see.</p>`;
   html += `</details>`;
 
-  // 5. Space station
+  // 5. Constellations (the stars to find tonight, next to the planets)
+  let st = null;
+  try { st = typeof starsTonight === "function" && lastData ? starsTonight(lastData) : null; } catch { st = null; }
+  if (st) {
+    html += `<details class="alm-sec" data-sec="skystars"${secOpen("skystars")}><summary><h3>${termBtn("constellation", "Constellations tonight")}</h3></summary>
+      ${st.visible.length ? `<p class="hint">Best placed around ${esc(fmtTime(st.when))}.</p><div class="stars">${st.visible.map((c) => `<div class="star-card">
+        <div class="sc-top"><b>${esc(c.name)}</b><span class="where">${esc(whereToLook(c.pos))}</span></div>
+        <p>${esc(c.find)}</p><p class="fact">${esc(c.fact)}</p></div>`).join("")}</div>` : `<p>No major constellations are well placed right now.</p>`}
+      <p class="hint">Away from streetlights you'll see far more. Give your eyes 15 minutes to adjust, and use red light if you need a flashlight.</p></details>`;
+  }
+
+  // 6. Space station
   html += `<details class="alm-sec" data-sec="skyiss"${secOpen("skyiss")}><summary><h3>${termBtn("iss", "Space station flyovers")}</h3></summary>`;
   if (sky.iss === null) html += `<p class="hint">Checking the space station's orbit…</p>`;
   else if (sky.iss === false) html += `<p class="hint">Couldn't get the station's orbit right now.</p>`;
@@ -661,6 +672,10 @@ function renderSky() {
   html += `</details>`;
 
   html += `</div></details>`;
+  // Peek: tonight's stargazing rating and the next thing coming up.
+  const nextEv = events.find((e) => e.t > now);
+  const peek = [tn ? `Tonight ${rateChip(tn.rating)}` : "", nextEv ? `${esc((nextEv.night || nextEv.t).toLocaleDateString(undefined, { month: "short", day: "numeric" }))}: ${esc(nextEv.title)}` : ""].filter(Boolean).join(" · ");
+  html = html.replace("%%SUMMARY%%", secSummary("Night sky", peek));
   // Keep any events the reader has opened open across refreshes.
   const opened = new Set([...el.querySelectorAll("details[data-k][open]")].map((d) => d.dataset.k));
   el.innerHTML = html;

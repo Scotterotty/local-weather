@@ -113,8 +113,8 @@ function wordOfDay(d, offset = 0) {
 let wordOffset = 0;
 function wordHtml(d) {
   const w = wordOfDay(d, wordOffset);
-  return `<details class="alm-all" data-sec="word"${typeof secOpen === "function" ? secOpen("word") : " open"}>
-      <summary><h2 class="label">${wordOffset ? "Weather word" : "Weather word of the day"}</h2></summary>
+  return `<details class="alm-all" data-sec="word"${secOpen("word")}>
+      ${secSummary(wordOffset ? "Weather word" : "Weather word of the day", esc(w.term))}
       <div class="word-term">${esc(w.term)}</div>
       ${w.aka ? `<div class="word-aka">${esc(w.aka)}</div>` : ""}
       <p>${esc(w.what)}</p>

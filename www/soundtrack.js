@@ -146,6 +146,7 @@ function soundtrackHtml(d) {
   if (!d?.hourly?.length) return "";
   const parts = dayParts(d.hourly);
   if (!parts.length) return "";
+  let peek = "";
   const rows = parts.map((g) => {
     // The part of the day you're in now follows the current conditions; later parts follow the forecast.
     const sky = g === parts[0] && g.hours[0].time - Date.now() < 3600e3 ? skyNowFrom(d) : skyOf(g.hours);
@@ -153,6 +154,7 @@ function soundtrackHtml(d) {
     const avgC = temps.length ? temps.reduce((a, x) => a + x, 0) / temps.length : 15;
     const pop = Math.max(0, ...g.hours.map((h) => h.pop || 0));
     const [style, artists, why] = pickSoundtrack(sky, g.part, avgC);
+    if (!peek) peek = `${esc(g.name)}: ${esc(style)}`;
     const night = g.part === "night" || g.part === "evening";
     const skyWord = { storm: "Storms", rain: "Rain", snow: "Snow", fog: "Fog", cloudy: "Cloudy", partly: night ? "Some clouds" : "Partly sunny", clear: night ? "Clear" : "Sunny" }[sky];
     const weather = `${skyWord}${WET.includes(sky) && pop >= 30 ? ` (${Math.round(pop)}%)` : ""}, around ${t(avgC)}${possibleNote(g.hours, sky)}`;
@@ -168,8 +170,8 @@ function soundtrackHtml(d) {
     </div>`;
   }).join("");
   return `<section class="panel soundtrack" aria-label="Soundtrack for your day">
-    <details class="alm-all" data-sec="music"${typeof secOpen === "function" ? secOpen("music") : " open"}>
-      <summary><h2 class="label">Soundtrack for your day</h2></summary>
+    <details class="alm-all" data-sec="music"${secOpen("music")}>
+      ${secSummary("Soundtrack for your day", peek)}
       <p class="hint">Music picked to match the weather ahead.</p>
       <div id="djSlot"></div>
       <div class="tracks">${rows}</div>
