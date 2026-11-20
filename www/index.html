@@ -54,7 +54,20 @@ header { display: flex; align-items: center; justify-content: space-between; gap
 .place { min-width: 0; }
 .place h1 { font: 600 1.35rem/1.2 var(--display); margin: 0; text-wrap: balance; }
 .place .sub { color: var(--muted); font-size: .82rem; }
+.place-btn { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font: inherit; color: inherit; }
+.place-btn .chev { width: 14px; height: 14px; flex: none; opacity: .6; }
+.place-btn:focus-visible, .sub-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.sub-btn { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: .82rem; }
+header.banded .sub-btn { color: var(--bar-muted); }
+.sub-btn .spin { width: 13px; height: 13px; flex: none; }
+.sub-btn:disabled .spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .controls { display: flex; gap: 8px; }
+#lookBtn { padding: 7px; line-height: 0; }
+#lookBtn svg { width: 20px; height: 20px; }
+.ptr { position: fixed; top: 8px; left: 50%; transform: translate(-50%, -60px); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: .82rem; color: var(--muted); z-index: 20; transition: transform .15s; pointer-events: none; }
+.ptr.show { transform: translate(-50%, 0); }
+.ptr.ready { color: var(--accent); border-color: var(--accent); }
 button, .btn {
   font: 500 .85rem var(--body); color: var(--fg); background: var(--surface);
   border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer;
@@ -279,6 +292,21 @@ footer .term { font-size: .8rem; }
 .alm-all > summary::after, .alm-sec > summary::after { content: ""; flex: none; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin: -4px 4px 0 0; transition: transform .2s; }
 .alm-all[open] > summary::after, .alm-sec[open] > summary::after { transform: rotate(-135deg); margin-top: 4px; }
 .alm-all > summary .label { margin: 0; }
+.sky-line { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: .9rem; color: var(--muted); display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.sky-line b { color: var(--fg); font-weight: 600; }
+.sky-line svg { vertical-align: -3px; }
+.now > .sky-line, .now > .now-more { grid-column: 1 / -1; }
+.now-more .stats { border-top: 0; padding-top: 4px; }
+.now-more { margin-top: 10px; }
+/* Explanations: a term is underlined once per panel; repeats stay tappable without the underline. */
+.term.quiet { text-decoration: none; }
+.label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 10px; }
+.label-row .label { margin: 0; }
+.key-btn { padding: 0; width: 24px; height: 24px; border-radius: 50%; font-size: .78rem; font-weight: 600; color: var(--muted); line-height: 1; }
+.key-btn[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+.now-more > summary { cursor: pointer; color: var(--accent); font-size: .85rem; font-weight: 600; }
+.now-more[open] > summary { margin-bottom: 4px; }
+.sky-more { color: var(--muted); font-size: .85rem; margin-top: 10px; }
 .sum-t { min-width: 0; flex: 1; }
 .sum-t .peek { margin-top: 4px; color: var(--fg); font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sum-t .peek .rate { font-size: .72rem; vertical-align: 1px; }
@@ -385,15 +413,13 @@ footer a { color: var(--accent); }
 <main>
   <header>
     <div class="place">
-      <h1 id="place">Finding your location…</h1>
-      <div class="sub" id="placeSub"></div>
+      <h1><button id="locBtn" type="button" class="place-btn" aria-label="Change location"><span id="place">Finding your location…</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></h1>
+      <button id="refreshBtn" type="button" class="sub-btn" aria-label="Refresh the forecast"><span id="placeSub"></span><svg class="spin" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     </div>
     <div class="controls">
-      <button id="lookBtn" type="button">Look</button>
-      <button id="unitBtn" type="button" aria-label="Switch units">°F</button>
-      <button id="locBtn" type="button">Location</button>
-      <button id="refreshBtn" type="button">Refresh</button>
+      <button id="lookBtn" type="button" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
     </div>
+    <div class="ptr" id="ptr" aria-hidden="true">Pull to refresh</div>
   </header>
 
   <div id="app"><div class="panel state">Getting your location and the latest forecast…</div></div>
@@ -1232,6 +1258,8 @@ function explainAll() {
   if (!$("explain").open) $("explain").showModal();
 }
 document.addEventListener("click", (e) => {
+  const k = e.target.closest("[data-key]");
+  if (k) { const el = $(k.dataset.key); el.hidden = !el.hidden; k.setAttribute("aria-expanded", String(!el.hidden)); return; }
   const b = e.target.closest("[data-term]");
   if (b) { e.preventDefault(); b.dataset.term === "all" ? explainAll() : explain(b.dataset.term, b.dataset.arg); return; }
   if (e.target === $("explain")) $("explain").close();   // tap outside the card closes it
@@ -1328,7 +1356,11 @@ function openLook() {
     ${FONT_GROUPS.map((g) => `<optgroup label="${g}">${FONT_LIST.filter((f) => f.group === g && (!bodyOnly || f.text)).map((f) => `<option value="${f.id}"${val === f.id ? " selected" : ""}>${f.label}</option>`).join("")}</optgroup>`).join("")}`;
   const prev = (id, sample) => { const f = id === "body" ? fontById(look.body) : fontById(id); return `<div class="font-prev" style="font-family:${f ? fam(f).replace(/"/g, "&quot;") : "var(--body)"}">${sample}</div>`; };
   $("explainBody").innerHTML = `
-    <div><h3 id="explainTitle">Look</h3><div class="aka">The same colors and fonts as Flaw Patrol. Saved on this phone.</div></div>
+    <div><h3 id="explainTitle">Settings</h3><div class="aka">Saved on this phone.</div></div>
+    <section class="look-sec"><h4>Units</h4><div class="chips">
+      ${[["F", "°F, mph, inches"], ["C", "°C, km/h, mm"]].map(([id, l]) => chip(`data-units="${id}"`, l, units === id, true)).join("")}
+    </div></section>
+    <p class="sub-h" style="margin:0;color:var(--muted);font-size:.82rem">Look: the same colors and fonts as Flaw Patrol.</p>
     <section class="look-sec"><h4>Style</h4><div class="chips">
       ${STYLES.map((x) => chip(`data-look-style="${x.id}" title="${x.sub}"`, x.label, look.style === x.id, true)).join("")}
     </div>${styleOf().mode ? `<p class="sub-h">${styleOf().label} has its own dark screen and title font. Pick Classic to use your own mode and colors.</p>` : ""}</section>
@@ -1349,8 +1381,12 @@ function openLook() {
         <label>Numbers and headings<select id="lookHeading">${fontOptions(look.heading, false, true)}</select>${prev(look.heading, "74° Garden Grove")}</label>
       </div>
     </section>
+    <section class="look-sec"><h4>Words</h4><p style="margin:0">${termBtn("all", "What do all these words mean?")}</p></section>
     <button type="button" class="close" id="explainClose">Done</button>`;
   $("explainClose").onclick = () => $("explain").close();
+  $("explainBody").querySelectorAll("[data-units]").forEach((b) => (b.onclick = () => {
+    units = b.dataset.units; store.set(LS.units, units); shareWithWidget(); render(); openLook();
+  }));
   $("explainBody").querySelectorAll("[data-look-style]").forEach((b) => (b.onclick = () => saveLook({ style: b.dataset.lookStyle })));
   $("explainBody").querySelectorAll("[data-look-mode]").forEach((b) => (b.onclick = () => saveLook({ mode: b.dataset.lookMode })));
   $("explainBody").querySelectorAll("[data-look-color]").forEach((b) => (b.onclick = () => saveLook({ color: b.dataset.lookColor })));
@@ -1385,7 +1421,6 @@ function uvStat(uv) {
 function render() {
   const d = lastData;
   if (!d) return;
-  $("unitBtn").textContent = units === "F" ? "°F" : "°C";
   $("place").textContent = current.label || d.place || `${current.lat.toFixed(3)}, ${current.lon.toFixed(3)}`;
   $("placeSub").textContent = `${current.label ? "Searched place" : "Your location"} · updated ${fmtTime(d.fetchedAt)}`;
   const c = d.current;
@@ -1415,22 +1450,27 @@ function render() {
       ${c.feelsC != null && Math.abs(c.feelsC - c.tempC) >= 1 ? `<div class="feels">${termBtn("feels", "Feels like")} ${t(c.feelsC)}</div>` : ""}
       ${(() => { const hl = [d.days[0]?.hiC != null && "High " + t(d.days[0].hiC), d.days[0]?.loC != null && "Low " + t(d.days[0].loC)].filter(Boolean).join(" · "); return hl ? `<div class="feels">${termBtn("hilo", hl)}</div>` : ""; })()}
     </div>
-    ${stats.length ? `<div class="stats">${stats.map(([key, k, v, sub, dot]) => `<div class="stat"><div class="k">${termBtn(key, k)}</div><div class="v">${dot ? `<span class="aqi-dot" style="background:${dot}"></span>` : ""}${key === "wind" && !isCalm(c.windKmh) ? windArrow(c.windDir) : ""}${esc(v)}</div>${sub ? `<div class="s">${esc(sub[0].toUpperCase() + sub.slice(1))}</div>` : ""}</div>`).join("")}</div>` : ""}
     ${(() => {
+      // The four readings people check most stay in view; the rest sit behind "More details".
+      const MAIN = ["wind", "humidity", "aqi", "uv"];
+      const cell = ([key, k, v, sub, dot]) => `<div class="stat"><div class="k">${termBtn(key, k)}</div><div class="v">${dot ? `<span class="aqi-dot" style="background:${dot}"></span>` : ""}${key === "wind" && !isCalm(c.windKmh) ? windArrow(c.windDir) : ""}${esc(v)}</div>${sub ? `<div class="s">${esc(sub[0].toUpperCase() + sub.slice(1))}</div>` : ""}</div>`;
+      const main = stats.filter((x) => MAIN.includes(x[0])), more = stats.filter((x) => !MAIN.includes(x[0]));
       const sun = sunTimes(current.lat, current.lon), mp = moonPhase();
       const len = sun.rise && sun.set ? (sun.set - sun.rise) / 36e5 : null;
-      return `<div class="sky">
-        <div><div class="k">${termBtn("sunrise", "Sunrise")}</div><div class="v">${sun.rise ? fmtTime(sun.rise) : "–"}</div></div>
-        <div><div class="k">${termBtn("sunrise", "Sunset")}</div><div class="v">${sun.set ? fmtTime(sun.set) : "–"}</div>${len ? `<div class="s">${Math.floor(len)} h ${Math.round((len % 1) * 60)} m of daylight</div>` : ""}</div>
-        <div><div class="k">${termBtn("moon", "Moon")}</div><div class="v">${moonIcon(mp, 22)}${Math.round(mp.illum * 100)}%</div><div class="s">${mp.name}</div></div>
-      </div>`;
+      const skyLine = `<div class="sky-line">${termBtn("sunrise", "Sunrise")} <b>${sun.rise ? fmtTime(sun.rise) : "–"}</b> · Sunset <b>${sun.set ? fmtTime(sun.set) : "–"}</b> · ${moonIcon(mp, 16)} ${termBtn("moon", `${Math.round(mp.illum * 100)}% moon`)}</div>`;
+      return `${main.length ? `<div class="stats">${main.map(cell).join("")}</div>` : ""}
+        ${skyLine}
+        <details class="now-more" data-sec="nowmore"${typeof secOpen === "function" ? secOpen("nowmore") : ""}><summary>More details</summary>
+          ${more.length ? `<div class="stats">${more.map(cell).join("")}</div>` : ""}
+          <div class="sky-more">${len ? `${Math.floor(len)} h ${Math.round((len % 1) * 60)} m of daylight · ` : ""}${mp.name} moon</div>
+          <div class="obs">${c.station ? `${termBtn("station", "Measured")} at ${esc(c.station)}${c.stationKm != null ? `, ${units === "F" ? Math.round(c.stationKm / 1.609) + " mi" : Math.round(c.stationKm) + " km"} away` : ""}, at ${fmtTime(c.observedAt)}${c.official === false ? " (volunteer station, no airport station reporting nearby)" : ""}` : `Current values from the forecast (${termBtn("station", "no recent station report")} nearby)`}</div>
+        </details>`;
     })()}
-    <div class="obs">${c.station ? `${termBtn("station", "Measured")} at ${esc(c.station)}${c.stationKm != null ? `, ${units === "F" ? Math.round(c.stationKm / 1.609) + " mi" : Math.round(c.stationKm) + " km"} away` : ""}, at ${fmtTime(c.observedAt)}${c.official === false ? " (volunteer station, no airport station reporting nearby)" : ""}` : `Current values from the forecast (${termBtn("station", "no recent station report")} nearby)`}</div>
   </section>
 
   <section class="panel" aria-label="Next 24 hours">
-    <h2 class="label">Next 24 hours</h2>
-    <div class="hint">${termBtn("hourly", "Temperature line")} · blue % = ${termBtn("pop", "chance of rain")} · inches = ${termBtn("amount", "how much")}</div>
+    <div class="label-row"><h2 class="label">Next 24 hours</h2><button type="button" class="key-btn" data-key="keyHourly" aria-expanded="false" aria-label="What the numbers mean">?</button></div>
+    <div class="hint" id="keyHourly" hidden>${termBtn("hourly", "Temperature line")} · blue % = ${termBtn("pop", "chance of rain")} · inches = ${termBtn("amount", "how much")}</div>
     ${(() => { const r = d.hourly.reduce((a, h) => a + (h.rainMm || 0), 0), sn = d.hourly.reduce((a, h) => a + (h.snowMm || 0), 0);
       const known = d.hourly.some((h) => h.rainMm != null);
       if (!known) return "";
@@ -1443,8 +1483,8 @@ function render() {
   </section>
 
   <section class="panel" aria-label="7-day forecast">
-    <h2 class="label">7-day forecast</h2>
-    <div class="hint">High and low each day · blue % = ${termBtn("pop", "chance of precipitation")}</div>
+    <div class="label-row"><h2 class="label">7-day forecast</h2><button type="button" class="key-btn" data-key="keyDays" aria-expanded="false" aria-label="What the numbers mean">?</button></div>
+    <div class="hint" id="keyDays" hidden>High and low each day · blue % = ${termBtn("pop", "chance of precipitation")}</div>
     <div class="days">${d.days.map((x) => `
       <div class="day">
         <div class="name">${esc(x.name)}</div>
@@ -1617,7 +1657,39 @@ function reviveCache() {
 
 $("lookBtn").addEventListener("click", openLook);
 applyLook();
-$("unitBtn").addEventListener("click", () => { units = units === "F" ? "C" : "F"; store.set(LS.units, units); shareWithWidget(); render(); });
+// Underline each explained word once per panel; later copies stay tappable but plain.
+function quietRepeats() {
+  document.querySelectorAll("#app .panel").forEach((p) => {
+    const seen = new Set();
+    p.querySelectorAll(".term").forEach((b) => {
+      if (b.closest(".hint")) return;      // the "?" keys always show their words as links
+      const k = b.dataset.term;
+      b.classList.toggle("quiet", seen.has(k));
+      seen.add(k);
+    });
+  });
+}
+let quietQueued = false;
+new MutationObserver(() => { if (!quietQueued) { quietQueued = true; requestAnimationFrame(() => { quietQueued = false; quietRepeats(); }); } })
+  .observe($("app"), { childList: true, subtree: true });
+
+// Pull down at the top of the page to refresh.
+(() => {
+  let y0 = null, pulled = 0;
+  const ptr = $("ptr");
+  addEventListener("touchstart", (e) => { y0 = scrollY <= 0 && !$("explain").open && e.touches.length === 1 ? e.touches[0].clientY : null; pulled = 0; }, { passive: true });
+  addEventListener("touchmove", (e) => {
+    if (y0 == null) return;
+    pulled = e.touches[0].clientY - y0;
+    if (scrollY > 0 || pulled < 0) { y0 = null; ptr.className = "ptr"; return; }
+    ptr.className = `ptr${pulled > 20 ? " show" : ""}${pulled > 90 ? " ready" : ""}`;
+    ptr.textContent = pulled > 90 ? "Release to refresh" : "Pull to refresh";
+  }, { passive: true });
+  addEventListener("touchend", () => {
+    if (y0 != null && pulled > 90 && !$("refreshBtn").disabled) (current ? load() : locate());
+    y0 = null; ptr.className = "ptr";
+  });
+})();
 $("locBtn").addEventListener("click", openLocation);
 $("refreshBtn").addEventListener("click", () => (current ? load() : locate()));
 document.addEventListener("visibilitychange", () => {
