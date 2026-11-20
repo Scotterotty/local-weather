@@ -343,7 +343,7 @@ Object.assign(TERMS, {
   stargazing: {
     title: "Stargazing conditions",
     what: "Three things decide how many stars you'll see: clouds, the moon and light pollution. Clouds block everything. A bright moon lights up the sky and hides fainter stars, so the best nights are around the new moon. City lights do the same thing, which is why a park or the countryside shows hundreds more stars than a backyard in town. This rating uses the cloud forecast and the moon; it can't know about streetlights near you.",
-    extra: () => scaleList([["Good", "Clear and dark. Great night to look up"], ["Fair", "Some clouds or a bright moon. Bright stars still show"], ["Poor", "Mostly cloudy or rainy"]], -1)
+    extra: () => scaleList([["Excellent", "Clear, and no moon in the way for hours"], ["Good", "Clear and dark. Great night to look up"], ["Fair", "Some clouds or a bright moon. Bright stars still show"], ["Poor", "Mostly cloudy or rainy"]], -1)
   },
   normal: {
     title: "Normal weather",
