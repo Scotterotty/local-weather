@@ -223,6 +223,49 @@ footer .term { font-size: .8rem; }
 :root[data-look="retro"] .chart path[stroke] { filter: drop-shadow(0 0 4px rgb(45 226 230 / .8)); }
 :root[data-look="retro"] :focus-visible { outline: 3px solid #2de2e6; outline-offset: 2px; }
 
+/* Night sky (sky.js) */
+.rate-excellent { background: color-mix(in srgb, #2a7de1 22%, var(--surface)); color: color-mix(in srgb, #2a7de1 75%, var(--fg)); }
+.sky-soon { border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius: 10px; padding: 8px 12px; font-size: .9rem; margin-bottom: 4px; }
+.nightsky > details, .nightsky .alm-body > * { min-width: 0; }
+.nhours { display: flex; gap: 2px; overflow-x: auto; padding-bottom: 4px; margin: 4px 0 8px; scrollbar-width: thin; }
+.nh { flex: 0 0 auto; min-width: 42px; display: grid; justify-items: center; gap: 2px; padding: 6px 2px; border-radius: 8px; font-size: .75rem; }
+.nh.good { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.nh .t { color: var(--muted); }
+.nh .cover { width: 18px; height: 18px; }
+.nh .mn { height: 12px; }
+.nights { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; margin-top: 4px; }
+.night { border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; display: grid; gap: 3px; justify-items: start; font-size: .78rem; }
+.night .nd { font-weight: 600; }
+.night .rate { margin: 0; font-size: .66rem; }
+.night .ns { display: flex; align-items: center; gap: 4px; color: var(--muted); }
+.night .cover { width: 14px; height: 14px; }
+.sky-evs, .passes { display: grid; gap: 10px; margin-bottom: 8px; }
+.pass { display: grid; grid-template-columns: 56px 1fr; gap: 10px; align-items: start; }
+.sky-ev > summary { display: grid; grid-template-columns: 56px 1fr; gap: 10px; align-items: start; list-style: none; cursor: pointer; }
+.sky-ev > summary::-webkit-details-marker, .sky-more > summary::-webkit-details-marker { display: none; }
+.sky-ev .ev-title::after { content: ""; display: inline-block; width: 6px; height: 6px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin: 0 0 3px 8px; transition: transform .2s; }
+.sky-ev[open] .ev-title::after { transform: rotate(-135deg); margin-bottom: 0; }
+.ev-body { margin: 6px 0 2px 66px; }
+.sky-more > summary { list-style: none; cursor: pointer; color: var(--accent); font-weight: 600; font-size: .88rem; margin-bottom: 10px; }
+.ev-date { display: grid; text-align: center; border: 1px solid var(--line); border-radius: 10px; padding: 6px 2px; line-height: 1.2; }
+.ev-date b { font-size: .85rem; }
+.ev-date span { font-size: .7rem; color: var(--muted); }
+.ev-main { min-width: 0; }
+.ev-tag { display: flex; align-items: center; gap: 5px; font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); font-weight: 600; }
+.ev-tag .term { color: inherit; }
+.ev-title { font-weight: 600; margin: 2px 0 2px; }
+.sky-ev p, .pass p { margin: 0 0 4px; font-size: .88rem; }
+.ev-fc { color: var(--muted); font-size: .8rem; margin-top: 2px; }
+.ev-fc .rate { font-size: .65rem; margin: 0 2px; }
+.pass .fact { color: var(--muted); font-size: .8rem; }
+.spots { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.spot { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; display: grid; gap: 4px; align-content: start; }
+.spot p { margin: 0; font-size: .86rem; }
+.sp-kind { font-size: .76rem; color: var(--muted); }
+.sp-cc { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: .8rem !important; }
+.sp-cc .cover { width: 14px; height: 14px; }
+.sp-go { justify-self: start; font-size: .82rem; font-weight: 600; color: var(--accent); }
+
 /* Almanac */
 .almanac { display: grid; gap: 4px; }
 .alm-body { display: grid; gap: 4px; }
@@ -1410,12 +1453,14 @@ function render() {
 
   <div id="favSlot"></div>
   <div id="wordSlot"></div>
+  <div id="skySlot"></div>
   <div id="soundtrackSlot"></div>
   <div id="almanacSlot"></div>`;
 
   mountRadar();
   if (typeof mountFav === "function") mountFav();
   if (typeof mountWord === "function") mountWord();
+  if (typeof mountSky === "function") mountSky();
   if (typeof mountSoundtrack === "function") mountSoundtrack();
   if (typeof mountAlmanac === "function") mountAlmanac();
   $("footer").innerHTML = `${termBtn("all", "What do all these words mean?")}<br><br>${BUILD.startsWith("__") ? "Built-in copy" : `App version ${BUILD}`}<br>Source: <a href="${d.sourceLink}" target="_blank" rel="noopener">${esc(d.source)}</a> · ${esc(d.sourceNote)}${d.fallbackReason ? ` · ${esc(d.fallbackReason)}` : ""}`;
@@ -1581,6 +1626,9 @@ reviveCache();
 locate();
 </script>
 <script src="almanac.js?v=__V__"></script>
+<script src="vendor/astronomy/astronomy.browser.min.js?v=2.1.19"></script>
+<script src="vendor/satellite/satellite.min.js?v=5.0.0"></script>
+<script src="sky.js?v=__V__"></script>
 <script src="wordofday.js?v=__V__"></script>
 <script src="favorite.js?v=__V__"></script>
 <script src="soundtrack.js?v=__V__"></script>
