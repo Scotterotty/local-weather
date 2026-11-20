@@ -99,11 +99,30 @@ const beaufort = (kmh) => [1, 6, 12, 20, 29, 39, 50, 62, 75, 89, 103, 118].findI
 
 function dayNumber() { const n = new Date(); return Math.floor((n - new Date(n.getFullYear(), 0, 0)) / 864e5) + n.getFullYear() * 400; }
 
-// Today's word: if any terms fit today's weather, pick one of those (the same one all day); otherwise rotate through the list.
+// Words that go with each favorite kind of weather (see favorite.js), so the word of the day leans toward it.
+const FAV_WORDS = {
+  sunny: ["UV index", "Rayleigh scattering", "Solstice", "Heat index", "Radiational cooling", "Urban heat island", "Equinox"],
+  cloudy: ["Cumulus", "Cirrus", "Stratus", "Inversion", "Marine layer", "Halo", "Cumulonimbus"],
+  rain: ["Petrichor", "Atmospheric river", "Front", "Rain shadow", "Virga", "Probability of precipitation", "Rainbow", "Precipitation"],
+  storms: ["Cumulonimbus", "Lightning", "Thunder", "Supercell", "Hail", "Tornado", "Doppler radar", "Reflectivity"],
+  snow: ["Graupel", "Supercooled water", "Freezing rain", "Frost", "Wind chill", "Orographic lift"],
+  fog: ["Marine layer", "Inversion", "Dew point", "Visibility", "Radiational cooling", "Humidity"],
+  windy: ["Santa Ana winds", "Jet stream", "Gust", "Beaufort scale", "Sea breeze", "Wind chill"]
+};
+
+// Today's word: if any terms fit today's weather, pick one of those (the same one all day), preferring ones that
+// go with your favorite weather. With nothing fitting, a word about your favorite weather, else rotate through the list.
 function wordOfDay(d, offset = 0) {
   const day = dayNumber();
   const why = (w) => { try { return w.when ? w.when(d) : null; } catch { return null; } };
-  const fitting = WORDS.map((w, i) => ({ w, i, why: why(w) })).filter((x) => x.why);
+  const favKind = typeof store !== "undefined" ? store.get("lw.fav") : null, favTerms = FAV_WORDS[favKind] || [];
+  const isFav = (x) => favTerms.includes(x.w.term);
+  let fitting = WORDS.map((w, i) => ({ w, i, why: why(w) })).filter((x) => x.why);
+  if (fitting.some(isFav)) fitting = fitting.filter(isFav);
+  if (!offset && !fitting.length && favTerms.length) {
+    const favs = WORDS.map((w, i) => ({ w, i })).filter(isFav);
+    if (favs.length) { const pick = favs[day % favs.length]; return { ...pick.w, why: `A word about ${typeof FAVS !== "undefined" && FAVS[favKind] ? FAVS[favKind].noun : "your favorite weather"}, your favorite weather.`, index: pick.i }; }
+  }
   if (!offset && fitting.length) { const pick = fitting[day % fitting.length]; return { ...pick.w, why: pick.why, index: pick.i }; }
   const base = fitting.length ? fitting[day % fitting.length].i : day % WORDS.length;
   const i = (base + offset) % WORDS.length;

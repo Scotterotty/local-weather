@@ -676,6 +676,14 @@ function renderSky() {
   const nextEv = events.find((e) => e.t > now);
   const peek = [tn ? `Tonight ${rateChip(tn.rating)}` : "", nextEv ? `${esc((nextEv.night || nextEv.t).toLocaleDateString(undefined, { month: "short", day: "numeric" }))}: ${esc(nextEv.title)}` : ""].filter(Boolean).join(" · ");
   html = html.replace("%%SUMMARY%%", secSummary("Night sky", peek));
+  // A short version for the Tonight card on the Weather tab.
+  const issTonight = sky.iss ? sky.iss.find((p) => p.end > now && p.start - now < 16 * 36e5) : null;
+  window.skyBrief = {
+    rating: tn ? rateChip(tn.rating) : null, best: tn && tn.q >= 0.35 ? `${fmtTime(tn.bestFrom)} to ${fmtTime(tn.bestTo)}` : null,
+    next: nextEv ? `${(nextEv.night || nextEv.t).toLocaleDateString(undefined, { month: "short", day: "numeric" })}: ${nextEv.title}` : null,
+    iss: issTonight ? `${fmtTime(issTonight.start)}, from the ${dirWord(issTonight.from)}` : null
+  };
+  if (typeof renderTonight === "function") renderTonight();
   // Keep any events the reader has opened open across refreshes.
   const opened = new Set([...el.querySelectorAll("details[data-k][open]")].map((d) => d.dataset.k));
   el.innerHTML = html;

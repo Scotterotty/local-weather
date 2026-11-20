@@ -296,6 +296,29 @@ footer .term { font-size: .8rem; }
 .sky-line b { color: var(--fg); font-weight: 600; }
 .sky-line svg { vertical-align: -3px; }
 .now > .sky-line, .now > .now-more { grid-column: 1 / -1; }
+/* Tabs: the page is split into Weather, Sky, Learn and Music. */
+body { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; display: flex; justify-content: center; background: var(--surface); border-top: 1px solid var(--line); padding: 4px max(8px, env(safe-area-inset-left)) max(4px, env(safe-area-inset-bottom)); }
+.tabs button { all: unset; cursor: pointer; flex: 1; max-width: 140px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; font: 600 .72rem var(--body); color: var(--muted); border-radius: 10px; }
+.tabs button svg { width: 22px; height: 22px; }
+.tabs button[aria-current="page"] { color: var(--accent); }
+.tabs button:focus-visible { outline: 2px solid var(--accent); }
+#app[data-tab="weather"] > :is(.fav, .word, .almanac, .soundtrack) { display: none; }
+#app[data-tab="sky"] > :not(.nightsky, .state) { display: none; }
+#app[data-tab="learn"] > :not(.fav, .word, .almanac, .state), #app[data-tab="learn"] > .nightsky { display: none; }
+#app[data-tab="music"] > :not(.soundtrack, .state) { display: none; }
+/* On their own tab, Night sky and Soundtrack are always open, so their header is just a title. */
+#app:is([data-tab="sky"], [data-tab="music"]) > .panel > .alm-all > summary { pointer-events: none; }
+#app:is([data-tab="sky"], [data-tab="music"]) > .panel > .alm-all > summary::after { display: none; }
+/* Tonight card */
+.tonight .label { margin-bottom: 6px; }
+.tn-row { all: unset; box-sizing: border-box; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; padding: 9px 0; border-top: 1px solid var(--line); font-size: .92rem; }
+.tn-row:first-of-type { border-top: 0; }
+.tn-row .tk { color: var(--muted); flex: none; }
+.tn-row .tv { text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tn-row .tv .rate { font-size: .72rem; }
+.tn-row:focus-visible { outline: 2px solid var(--accent); border-radius: 6px; }
+.fav-badge { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: .7rem; font-weight: 600; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); vertical-align: 1px; white-space: nowrap; }
 .now-more .stats { border-top: 0; padding-top: 4px; }
 .now-more { margin-top: 10px; }
 /* Explanations: a term is underlined once per panel; repeats stay tappable without the underline. */
@@ -422,9 +445,10 @@ footer a { color: var(--accent); }
     <div class="ptr" id="ptr" aria-hidden="true">Pull to refresh</div>
   </header>
 
-  <div id="app"><div class="panel state">Getting your location and the latest forecast…</div></div>
+  <div id="app" data-tab="weather"><div class="panel state">Getting your location and the latest forecast…</div></div>
 
   <footer id="footer"></footer>
+  <nav class="tabs" id="tabs" aria-label="Sections"><button type="button" data-tab="weather" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17.5h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.1 11 3.25 3.25 0 0 0 7 17.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Weather</span></button><button type="button" data-tab="sky" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Sky</span></button><button type="button" data-tab="learn" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5v-13ZM20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5v-13Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Learn</span></button><button type="button" data-tab="music" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l11-2v12M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm11-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Music</span></button></nav>
 </main>
 <dialog class="explain" id="explain" aria-labelledby="explainTitle"><div class="inner" id="explainBody"></div></dialog>
 
@@ -1468,6 +1492,8 @@ function render() {
     })()}
   </section>
 
+  <div id="tonightSlot"></div>
+
   <section class="panel" aria-label="Next 24 hours">
     <div class="label-row"><h2 class="label">Next 24 hours</h2><button type="button" class="key-btn" data-key="keyHourly" aria-expanded="false" aria-label="What the numbers mean">?</button></div>
     <div class="hint" id="keyHourly" hidden>${termBtn("hourly", "Temperature line")} · blue % = ${termBtn("pop", "chance of rain")} · inches = ${termBtn("amount", "how much")}</div>
@@ -1485,9 +1511,10 @@ function render() {
   <section class="panel" aria-label="7-day forecast">
     <div class="label-row"><h2 class="label">7-day forecast</h2><button type="button" class="key-btn" data-key="keyDays" aria-expanded="false" aria-label="What the numbers mean">?</button></div>
     <div class="hint" id="keyDays" hidden>High and low each day · blue % = ${termBtn("pop", "chance of precipitation")}</div>
+    ${(() => { const fd = typeof favDayKeys === "function" ? favDayKeys(d) : null; render.favDays = fd; return ""; })()}
     <div class="days">${d.days.map((x) => `
       <div class="day">
-        <div class="name">${esc(x.name)}</div>
+        <div class="name">${esc(x.name)}${render.favDays?.keys.has(x.key) ? `<span class="fav-badge" title="A chance of your favorite weather">${esc(render.favDays.name)}</span>` : ""}</div>
         ${iconFor(x.desc, x.isDay !== false)}
         <div class="short">${x.desc ? condBtn(x.desc) : ""}${x.pop ? ` <span class="pop">· ${x.pop}%${amount(x.rainMm) ? `, ${traceTap(amount(x.rainMm))}` : ""}${amount(x.snowMm, true) ? `, ${traceTap(amount(x.snowMm, true))} snow` : ""}</span>` : ""}</div>
         <div class="range">${x.hiC != null ? t(x.hiC) : ""}${x.loC != null ? ` <span class="lo">${t(x.loC)}</span>` : ""}</div>
@@ -1508,6 +1535,8 @@ function render() {
   if (typeof mountSky === "function") mountSky();
   if (typeof mountSoundtrack === "function") mountSoundtrack();
   if (typeof mountAlmanac === "function") mountAlmanac();
+  renderTonight();
+  setTab(currentTab(), false);
   $("footer").innerHTML = `${termBtn("all", "What do all these words mean?")}<br><br>${BUILD.startsWith("__") ? "Built-in copy" : `App version ${BUILD}`}<br>Source: <a href="${d.sourceLink}" target="_blank" rel="noopener">${esc(d.source)}</a> · ${esc(d.sourceNote)}${d.fallbackReason ? ` · ${esc(d.fallbackReason)}` : ""}`;
 }
 
@@ -1657,6 +1686,51 @@ function reviveCache() {
 
 $("lookBtn").addEventListener("click", openLook);
 applyLook();
+// ---------- tabs ----------
+// The tab lives in the address (#sky, #learn, #music) so the phone's back button goes back to the last tab.
+const TABS = ["weather", "sky", "learn", "music"];
+const currentTab = () => { const h = location.hash.slice(1); return TABS.includes(h) ? h : "weather"; };
+function setTab(tab, scroll = true) {
+  $("app").dataset.tab = tab;
+  document.querySelectorAll("#tabs [data-tab]").forEach((b) => b.setAttribute("aria-current", b.dataset.tab === tab ? "page" : "false"));
+  // Night sky and Soundtrack are the only thing on their tab, so show them open.
+  if (tab === "sky" || tab === "music") document.querySelectorAll(`#app > ${tab === "sky" ? ".nightsky" : ".soundtrack"} > .alm-all`).forEach((d) => { d.open = true; });
+  if (scroll) scrollTo(0, 0);
+}
+$("tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-tab]");
+  if (!b) return;
+  const tab = b.dataset.tab;
+  if (tab === currentTab()) { scrollTo({ top: 0, behavior: "smooth" }); return; }
+  if (tab === "weather") history.pushState(null, "", location.pathname + location.search);
+  else location.hash = tab;
+  setTab(tab);
+});
+addEventListener("hashchange", () => setTab(currentTab()));
+addEventListener("popstate", () => setTab(currentTab()));
+
+// ---------- tonight ----------
+// After sunset, one card on the Weather tab pulls together the night: stargazing, the Moon, the space station,
+// what's coming up in the sky, and tonight's soundtrack. Each row opens its tab.
+function renderTonight() {
+  const slot = $("tonightSlot") || $("tonight");
+  if (!slot || !current) return;
+  const now = new Date(), sun = sunTimes(current.lat, current.lon);
+  const night = sun.set && sun.rise ? (now > new Date(sun.set.getTime() - 36e5) || now < sun.rise) : false;
+  if (!night) { slot.outerHTML = `<div id="tonightSlot"></div>`; return; }
+  const sb = window.skyBrief || {}, mp = moonPhase(), mb = window.soundtrackBrief;
+  const row = (tab, k, v) => v ? `<button type="button" class="tn-row" data-go="${tab}"><span class="tk">${k}</span><span class="tv">${v}</span></button>` : "";
+  slot.outerHTML = `<section class="panel tonight" id="tonight" aria-label="Tonight">
+    <h2 class="label">Tonight</h2>
+    ${row("sky", "Stargazing", sb.rating ? `${sb.rating}${sb.best ? ` best ${esc(sb.best)}` : ""}` : "")}
+    ${row("sky", "Moon", `${moonIcon(mp, 14)} ${Math.round(mp.illum * 100)}%, ${esc(mp.name.toLowerCase())}`)}
+    ${row("sky", "Space station", sb.iss ? esc(sb.iss) : "")}
+    ${row("sky", "Coming up", sb.next ? esc(sb.next) : "")}
+    ${row("music", "Soundtrack", mb ? esc(mb.style) : "")}
+  </section>`;
+  $("tonight").addEventListener("click", (e) => { const b = e.target.closest("[data-go]"); if (b) { location.hash = b.dataset.go; setTab(b.dataset.go); } });
+}
+
 // Underline each explained word once per panel; later copies stay tappable but plain.
 function quietRepeats() {
   document.querySelectorAll("#app .panel").forEach((p) => {

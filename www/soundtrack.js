@@ -154,7 +154,7 @@ function soundtrackHtml(d) {
     const avgC = temps.length ? temps.reduce((a, x) => a + x, 0) / temps.length : 15;
     const pop = Math.max(0, ...g.hours.map((h) => h.pop || 0));
     const [style, artists, why] = pickSoundtrack(sky, g.part, avgC);
-    if (!peek) peek = `${esc(g.name)}: ${esc(style)}`;
+    if (!peek) { peek = `${esc(g.name)}: ${esc(style)}`; window.soundtrackBrief = { name: g.name, style }; }
     const night = g.part === "night" || g.part === "evening";
     const skyWord = { storm: "Storms", rain: "Rain", snow: "Snow", fog: "Fog", cloudy: "Cloudy", partly: night ? "Some clouds" : "Partly sunny", clear: night ? "Clear" : "Sunny" }[sky];
     const weather = `${skyWord}${WET.includes(sky) && pop >= 30 ? ` (${Math.round(pop)}%)` : ""}, around ${t(avgC)}${possibleNote(g.hours, sky)}`;

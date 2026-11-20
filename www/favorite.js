@@ -343,6 +343,16 @@ function countdown(kind, d) {
   return { isPct, rows, next: next && { name: dayName(next.x), inDays: inDays(next.x), desc: next.x.desc } };
 }
 
+// For the 7-day forecast: the days your favorite weather has a real chance, so they can be marked there.
+function favDayKeys(d) {
+  const kind = store.get(FAV_KEY), f = FAVS[kind];
+  if (!f || !d?.days?.length) return null;
+  try {
+    const cd = countdown(kind, d);
+    return { name: f.name, keys: new Set(cd.rows.filter(({ c }) => cd.isPct ? c.pct >= 30 : c.says).map(({ x }) => x.key)) };
+  } catch { return null; }
+}
+
 // ---------- rendering ----------
 function favHtml(d) {
   const kind = store.get(FAV_KEY);
