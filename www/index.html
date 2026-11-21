@@ -1693,13 +1693,16 @@ $("lookBtn").addEventListener("click", openLook);
 applyLook();
 // ---------- tabs ----------
 // The tab lives in the address (#sky, #learn, #music) so the phone's back button goes back to the last tab.
-const TABS = ["weather", "sky", "learn", "music", "chores"];
+// The Android/iOS app leaves out the Chores tab (and its slide-out Weather panel); the web version keeps it.
+const NATIVE_APP = !!window.Capacitor?.isNativePlatform?.();
+const TABS = NATIVE_APP ? ["weather", "sky", "learn", "music"] : ["weather", "sky", "learn", "music", "chores"];
+if (NATIVE_APP) { document.querySelector('#tabs [data-tab="chores"]')?.remove(); $("choresRoot").remove(); }
 const currentTab = () => { const h = location.hash.slice(1); return TABS.includes(h) ? h : "weather"; };
 function setTab(tab, scroll = true) {
   $("app").dataset.tab = tab;
   // Chores has its own container, so weather refreshes never redraw it while someone is typing or ticking boxes.
   $("app").style.display = tab === "chores" ? "none" : "";
-  $("choresRoot").hidden = tab !== "chores";
+  if ($("choresRoot")) $("choresRoot").hidden = tab !== "chores";
   if (tab === "chores" && typeof showChores === "function") showChores();
   document.querySelectorAll("#tabs [data-tab]").forEach((b) => b.setAttribute("aria-current", b.dataset.tab === tab ? "page" : "false"));
   // Night sky and Soundtrack are the only thing on their tab, so show them open.
