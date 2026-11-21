@@ -269,6 +269,55 @@
     return out;
   }
 
+  // ---------- parent PIN ----------
+  // Swapping, adding and removing chores asks for a parent PIN. Only a salted hash is stored here, never the PIN itself.
+  // This is a speed bump for kids on the same iPad, not real security: anyone who can open the browser tools can get around it.
+  const PIN_HASH = "003b3e0c18243f13bf82eb99dfb342a76eb862ec373c047bd99e0838005a4ac2", PIN_SALT = "lw-chores-pin:", UNLOCK_MS = 5 * 60 * 1000;
+  let unlockedUntil = 0, lockTimer = null, fails = 0, lockedOutUntil = 0;
+  const isUnlocked = () => Date.now() < unlockedUntil;
+  async function sha256(text) {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  function relock() {
+    unlockedUntil = 0; swap = null;
+    const d = document.getElementById("chEditor"); if (d) d.open = false;
+    if (built) renderBoard();
+  }
+  function unlock() {
+    unlockedUntil = Date.now() + UNLOCK_MS;
+    clearTimeout(lockTimer); lockTimer = setTimeout(relock, UNLOCK_MS);
+  }
+  // Runs go() now if a parent unlocked in the last 5 minutes, otherwise asks for the PIN first.
+  function requirePin(go, why) {
+    if (isUnlocked()) { unlock(); go(); return; }
+    const opener = document.activeElement;
+    const msg = h("p", { class: "ch-pinmsg", role: "alert" }, "");
+    const input = h("input", { type: "password", inputmode: "numeric", pattern: "[0-9]*", maxlength: "8", autocomplete: "off", "aria-label": "Parent PIN" });
+    const close = () => { box.remove(); if (opener && opener.focus && document.contains(opener)) opener.focus(); };
+    const submit = async () => {
+      if (Date.now() < lockedOutUntil) { msg.textContent = "Too many tries. Wait a few seconds."; return; }
+      let ok = false;
+      try { ok = (await sha256(PIN_SALT + input.value.trim())) === PIN_HASH; }
+      catch (e) { msg.textContent = "The PIN check needs a secure page (https)."; return; }
+      if (ok) { fails = 0; close(); unlock(); go(); return; }
+      fails++; input.value = "";
+      if (fails >= 3) { lockedOutUntil = Date.now() + 30000; fails = 0; msg.textContent = "Wrong PIN. Try again in 30 seconds."; }
+      else msg.textContent = "That PIN didn't match.";
+      input.focus();
+    };
+    const box = h("div", { class: "ch-pin", role: "dialog", "aria-modal": "true", "aria-labelledby": "chPinT",
+      onkeydown: (e) => { if (e.key === "Escape") close(); if (e.key === "Enter") submit(); } },
+      h("div", { class: "ch-pincard" },
+        h("h2", { id: "chPinT" }, "Parent PIN"),
+        h("p", { class: "ch-sub" }, why || "Enter the PIN to make changes."),
+        input, msg,
+        h("div", { class: "ch-row" },
+          h("button", { class: "ch-btn pri", type: "button", onclick: submit }, "Unlock"),
+          h("button", { class: "ch-btn", type: "button", onclick: close }, "Cancel"))));
+    document.body.append(box); input.focus();
+  }
+
   // ---------- screen ----------
   let built = false, view = noon(new Date()), followToday = true, swap = null, punchOpen = "", lastAdded = null, drawerOpen = false;
   const root = () => document.getElementById("choresRoot");
@@ -348,10 +397,18 @@
 .ch-wxtab { position: fixed; right: 0; top: 50%; transform: translateY(-50%); z-index: 20; writing-mode: vertical-rl; min-height: 96px; padding: 14px 8px; border-radius: 14px 0 0 14px; border-right: none; background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 700; letter-spacing: .08em; }
 .ch-back { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,.4); }
 .ch-back[hidden] { display: none; }
-.ch-wxpanel { gap: 20px !important; position: fixed; top: 0; right: 0; bottom: 0; width: min(380px, 92vw); z-index: 40; background: var(--surface); border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(0,0,0,.3); transform: translateX(100%); transition: transform .25s ease; padding: max(18px, env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom)); overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
-.ch-wxpanel.open { transform: none; }
+.ch-wxpanel { gap: 20px !important; position: fixed; top: 0; right: 0; bottom: 0; width: min(380px, 92vw); z-index: 40; background: var(--surface); border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(0,0,0,.3); transform: translateX(100%); visibility: hidden; transition: transform .25s ease, visibility 0s linear .25s; padding: max(18px, env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom)); overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.ch-wxpanel.open { transform: none; visibility: visible; transition-delay: 0s; }
 @media (prefers-reduced-motion: reduce) { .ch-wxpanel { transition: none; } }
+#choresRoot { overflow-x: clip; max-width: 100%; }
+.tabs { transform: translateZ(0); -webkit-transform: translateZ(0); will-change: transform; }
 #chWxBody { display: grid; gap: 18px; }
+.ch-pin { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.55); display: grid; place-items: center; padding: 16px; }
+.ch-pincard { background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 18px; padding: 22px; width: min(340px, 100%); display: grid; gap: 14px; }
+.ch-pincard h2 { margin: 0; font: 600 1.3rem var(--display); }
+.ch-pincard p { margin: 0; }
+.ch-pincard input { font: 600 1.6rem var(--body); letter-spacing: .4em; text-align: center; min-height: 52px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--fg); width: 100%; }
+.ch-pinmsg { min-height: 1.2em; color: var(--warm); font-size: .85rem; font-weight: 600; }
 .ch-wxhead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .ch-wxhead h2 { margin: 0; font: 600 1.25rem var(--display); }
 .ch-wxclose { min-width: 44px; min-height: 44px; border-radius: 22px; font-size: 1.5rem; line-height: 1; padding: 0; }
@@ -397,6 +454,9 @@
         h("div", { class: "ch-wxhead", }, h("h2", { id: "chWxTitle" }, "Weather"), h("button", { class: "ch-wxclose", id: "chWxClose", type: "button", "aria-label": "Close weather" }, "×")),
         h("div", { id: "chWxBody" }),
         h("button", { class: "ch-btn", id: "chWxFull", type: "button" }, "See the full forecast")));
+    q("chEditor").querySelector("summary").addEventListener("click", (e) => {
+      if (!q("chEditor").open && !isUnlocked()) { e.preventDefault(); requirePin(() => { q("chEditor").open = true; }, "Enter the PIN to add, remove or change chores."); }
+    });
     q("chPrev").onclick = () => { view = addDays(view, -7); followToday = false; renderBoard(); };
     q("chNext").onclick = () => { view = addDays(view, 7); followToday = false; renderBoard(); };
     q("chToday").onclick = () => { view = noon(new Date()); followToday = true; renderBoard(); };
@@ -427,6 +487,7 @@
     save(); renderBoard();
   }
   function toggleSwap(list, id) {
+    if (!isUnlocked() && !(swap && swap.list === list && swap.id === id)) { requirePin(() => toggleSwap(list, id), "Enter the PIN to swap a chore."); return; }
     swap = (swap && swap.list === list && swap.id === id) ? null : { list, id, scope: null };
     renderBoard();
   }
