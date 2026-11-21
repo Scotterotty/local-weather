@@ -6,7 +6,7 @@ The app is one web page (`www/index.html`) wrapped as a native iOS and Android a
 
 ## Chores tab
 
-A fifth tab for the kids' chores: daily, weekly and monthly chores that rotate one kid to the right each week (monthly: each month), chores pinned to one kid, one-tap swaps for a day, week or month, a joke and fun fact of the day, and a slide-out "what to wear" panel fed by the live forecast. It's all in `www/chores.js` and is saved on the device only (`lw.chores`). Kids' names and chores are typed into the app, so none are in this public repo.
+Web version only (the Android and iOS app leave it out). A fifth tab for the kids' chores: daily, weekly and monthly chores that rotate one kid to the right each week (monthly: each month), chores pinned to one kid, one-tap swaps for a day, week or month, a joke and fun fact of the day, and a slide-out "what to wear" panel fed by the live forecast. It's all in `www/chores.js` and is saved on the device only (`lw.chores`). Kids' names and chores are typed into the app, so none are in this public repo.
 
 ## Web version
 
