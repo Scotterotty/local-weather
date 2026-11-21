@@ -449,9 +449,10 @@ footer a { color: var(--accent); }
   </header>
 
   <div id="app" data-tab="weather"><div class="panel state">Getting your location and the latest forecast…</div></div>
+  <div id="choresRoot" hidden></div>
 
   <footer id="footer"></footer>
-  <nav class="tabs" id="tabs" aria-label="Sections"><button type="button" data-tab="weather" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17.5h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.1 11 3.25 3.25 0 0 0 7 17.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Weather</span></button><button type="button" data-tab="sky" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Sky</span></button><button type="button" data-tab="learn" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5v-13ZM20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5v-13Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Learn</span></button><button type="button" data-tab="music" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l11-2v12M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm11-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Music</span></button></nav>
+  <nav class="tabs" id="tabs" aria-label="Sections"><button type="button" data-tab="weather" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17.5h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.1 11 3.25 3.25 0 0 0 7 17.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Weather</span></button><button type="button" data-tab="sky" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Sky</span></button><button type="button" data-tab="learn" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5v-13ZM20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5v-13Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Learn</span></button><button type="button" data-tab="music" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l11-2v12M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm11-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Music</span></button><button type="button" data-tab="chores" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M3.5 6l1.2 1.2L7 4.8M3.5 12l1.2 1.2L7 10.8M3.5 18l1.2 1.2L7 16.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Chores</span></button></nav>
 </main>
 <dialog class="explain" id="explain" aria-labelledby="explainTitle"><div class="inner" id="explainBody"></div></dialog>
 
@@ -1540,6 +1541,7 @@ function render() {
   if (typeof mountAlmanac === "function") mountAlmanac();
   renderTonight();
   setTab(currentTab(), false);
+  if (typeof refreshChoresWeather === "function") refreshChoresWeather();
   $("footer").innerHTML = `${termBtn("all", "What do all these words mean?")}<br><br>${BUILD.startsWith("__") ? "Built-in copy" : `App version ${BUILD}`}<br>Source: <a href="${d.sourceLink}" target="_blank" rel="noopener">${esc(d.source)}</a> · ${esc(d.sourceNote)}${d.fallbackReason ? ` · ${esc(d.fallbackReason)}` : ""}`;
 }
 
@@ -1691,10 +1693,14 @@ $("lookBtn").addEventListener("click", openLook);
 applyLook();
 // ---------- tabs ----------
 // The tab lives in the address (#sky, #learn, #music) so the phone's back button goes back to the last tab.
-const TABS = ["weather", "sky", "learn", "music"];
+const TABS = ["weather", "sky", "learn", "music", "chores"];
 const currentTab = () => { const h = location.hash.slice(1); return TABS.includes(h) ? h : "weather"; };
 function setTab(tab, scroll = true) {
   $("app").dataset.tab = tab;
+  // Chores has its own container, so weather refreshes never redraw it while someone is typing or ticking boxes.
+  $("app").style.display = tab === "chores" ? "none" : "";
+  $("choresRoot").hidden = tab !== "chores";
+  if (tab === "chores" && typeof showChores === "function") showChores();
   document.querySelectorAll("#tabs [data-tab]").forEach((b) => b.setAttribute("aria-current", b.dataset.tab === tab ? "page" : "false"));
   // Night sky and Soundtrack are the only thing on their tab, so show them open.
   if (tab === "sky" || tab === "music") document.querySelectorAll(`#app > ${tab === "sky" ? ".nightsky" : ".soundtrack"} > .alm-all`).forEach((d) => { d.open = true; });
@@ -1787,5 +1793,6 @@ locate();
 <script src="favorite.js?v=__V__"></script>
 <script src="soundtrack.js?v=__V__"></script>
 <script src="dj.js?v=__V__"></script>
+<script src="chores.js?v=__V__"></script>
 </body>
 </html>
