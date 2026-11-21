@@ -287,7 +287,7 @@
 .ch-btn:disabled { opacity: .5; cursor: default; }
 .ch-btn.pri { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 .ch-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
-.ch-day { min-height: 52px; border-radius: 12px; padding: 4px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; font-weight: 600; }
+.ch-day { background: var(--surface); border: 1px solid var(--line); min-height: 56px; border-radius: 12px; padding: 4px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; font-weight: 600; }
 .ch-day small { font-weight: 500; color: var(--muted); font-size: .72rem; }
 .ch-day[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 .ch-day[aria-pressed="true"] small { color: var(--bg); opacity: .85; }
@@ -301,20 +301,23 @@
 @media (max-width: 600px) { .ch-daily { grid-template-columns: minmax(0, 1fr); } .ch-day small { display: none; } }
 .ch-kids { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
 @media (max-width: 600px) { .ch-kids { grid-template-columns: minmax(0, 1fr); } }
-.ch-kid { --kc-ink: color-mix(in srgb, var(--kc) 70%, var(--fg)); --kc-tint: color-mix(in srgb, var(--kc) 14%, var(--surface));
-  border-top: 6px solid var(--kc); display: flex; flex-direction: column; gap: 8px; padding: 14px; }
-.ch-kid h3 { margin: 0; font: 600 1.4rem var(--display); color: var(--kc-ink); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.ch-kid { background: var(--surface); --kc-ink: color-mix(in srgb, var(--kc) 50%, var(--fg)); --kc-tint: color-mix(in srgb, var(--kc) 20%, var(--surface));
+  border-top: 6px solid var(--kc); display: flex; flex-direction: column; gap: 10px; padding: 16px; }
+.ch-kid h3 { margin: 0; font: 700 1.6rem var(--display); color: var(--kc-ink); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .ch-kid h3 span { font: 600 .8rem var(--body); color: var(--muted); }
 .ch-kid.alldone h3 span { color: var(--accent); }
 .ch-task { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px; border-radius: 12px; background: var(--kc-tint); min-height: 56px; }
-.ch-task input { width: 24px; height: 24px; margin: 2px 0 0; accent-color: var(--kc); }
+.ch-task input { appearance: none; -webkit-appearance: none; width: 26px; height: 26px; margin: 1px 0 0; border: 2.5px solid var(--kc); border-radius: 8px; background: var(--bg); display: grid; place-content: center; cursor: pointer; }
+.ch-task input::after { content: ""; width: 7px; height: 13px; border: solid var(--bg); border-width: 0 3px 3px 0; transform: rotate(45deg) translate(-1px,-1px); opacity: 0; }
+.ch-task input:checked { background: var(--kc); }
+.ch-task input:checked::after { opacity: 1; }
 .ch-task label { cursor: pointer; min-width: 0; }
 .ch-task .tag { font: 700 .68rem var(--body); letter-spacing: .07em; text-transform: uppercase; color: var(--kc-ink); }
-.ch-task .txt { font-weight: 600; overflow-wrap: anywhere; }
+.ch-task .txt { font-weight: 600; font-size: 1.02rem; overflow-wrap: anywhere; }
 .ch-task.done .txt { text-decoration: line-through; opacity: .55; }
 .ch-task.none { background: transparent; border: 1px dashed var(--line); }
 .ch-task.none .txt { color: var(--muted); font-weight: 500; }
-.ch-swapbtn { min-height: 40px; padding: 0 14px; border-radius: 20px; border-color: var(--kc); color: var(--kc-ink); background: transparent; font-weight: 700; font-size: .8rem; }
+.ch-swapbtn { min-height: 40px; padding: 0 14px; border-radius: 20px; border: 1.5px solid var(--kc); color: var(--kc-ink); background: var(--bg); font-weight: 700; font-size: .8rem; }
 .ch-swapbtn[aria-expanded="true"] { background: var(--kc); color: var(--bg); }
 .ch-swapmenu { border: 1.5px solid var(--kc); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--bg); }
 .ch-lab { font-size: .8rem; font-weight: 700; color: var(--muted); }
@@ -376,7 +379,8 @@
               h("button", { class: "ch-btn", id: "chPrev", type: "button", "aria-label": "Previous week" }, "← Week"),
               h("div", { class: "ch-week", id: "chWeek", "aria-live": "polite" }),
               h("button", { class: "ch-btn", id: "chNext", type: "button", "aria-label": "Next week" }, "Week →"),
-              h("button", { class: "ch-btn pri", id: "chToday", type: "button" }, "Today")))),
+              h("button", { class: "ch-btn pri", id: "chToday", type: "button" }, "Today"),
+              h("button", { class: "ch-btn", id: "chLook", type: "button" }, "Look")))),
         h("section", { class: "panel ch-daily", id: "chDaily", "aria-label": "Joke and fun fact of the day" }),
         h("div", { class: "ch-days", id: "chDays", role: "group", "aria-label": "Day of the week" }),
         h("div", { class: "ch-kids", id: "chKids" }),
@@ -395,6 +399,7 @@
     q("chPrev").onclick = () => { view = addDays(view, -7); followToday = false; renderBoard(); };
     q("chNext").onclick = () => { view = addDays(view, 7); followToday = false; renderBoard(); };
     q("chToday").onclick = () => { view = noon(new Date()); followToday = true; renderBoard(); };
+    q("chLook").onclick = () => { const b = document.getElementById("lookBtn"); if (b) b.click(); };
     q("chWxTab").onclick = () => wxToggle(!drawerOpen);
     q("chWxClose").onclick = () => wxToggle(false);
     q("chBack").onclick = () => wxToggle(false);
@@ -430,7 +435,7 @@
     const applied = appliedKeys(list, c.id, view).filter((k) => okKid(ovr[k]));
     return h("div", { class: "ch-swapmenu" },
       h("div", { class: "ch-lab" }, "Give “" + c.t + "” to"),
-      h("div", { class: "ch-row" }, cfg.kids.map((nm, k) => h("button", { class: "ch-kidbtn", type: "button", style: "--kc:" + KID_COLORS[k % 8] + ";--kc-ink:color-mix(in srgb," + KID_COLORS[k % 8] + " 70%,var(--fg))",
+      h("div", { class: "ch-row" }, cfg.kids.map((nm, k) => h("button", { class: "ch-kidbtn", type: "button", style: "--kc:" + KID_COLORS[k % 8] + ";--kc-ink:color-mix(in srgb," + KID_COLORS[k % 8] + " 50%,var(--fg))",
         "aria-pressed": k === cur ? "true" : "false", disabled: k === cur,
         onclick: () => { const key = scopeKey(list, swap.scope, c.id, view); swap = null; setOverride(key, k); } }, nm))),
       scopes.length > 1
@@ -470,7 +475,7 @@
     }));
     const rows = [["Daily", "daily"], ["Weekly", "weekly"], ["Monthly · " + MONTHS[view.getMonth()], "monthly"]];
     q("chMatrix").replaceChildren(
-      h("thead", null, h("tr", null, h("th"), cfg.kids.map((nm, k) => h("th", { style: "color:color-mix(in srgb," + KID_COLORS[k % 8] + " 70%,var(--fg))" }, nm)))),
+      h("thead", null, h("tr", null, h("th"), cfg.kids.map((nm, k) => h("th", { style: "color:color-mix(in srgb," + KID_COLORS[k % 8] + " 50%,var(--fg))" }, nm)))),
       h("tbody", null, rows.map(([lbl, list]) => h("tr", null, h("th", { scope: "row" }, lbl),
         cfg.kids.map((_, k) => {
           const names = cfg[list].filter((c, pos) => c.t && holderOn(list, pos, view, true) === k).map((c) => c.t);
@@ -544,7 +549,7 @@
     const tips = wearAdvice(day.loC != null ? cToF(day.loC) : null, day.hiC != null ? cToF(day.hiC) : null, pop);
     body.replaceChildren(
       h("div", null, h("div", { class: "ch-wxtemp" }, t(big)), h("div", { class: "ch-wxsky" }, (isToday ? "Right now" : "High") + (sky ? " · " + sky : "") + feels)),
-      h("div", { class: "ch-wxrow" }, stat(t(day.hiC), "High"), stat(t(day.loC), "Low"), stat(pop + "%", "Rain")),
+      h("div", { class: "ch-wxrow" }, (day.hiC != null ? stat(t(day.hiC), "High") : stat(c.feelsC != null ? t(c.feelsC) : "\u2013", "Feels like")), stat(t(day.loC), "Low"), stat(pop + "%", "Rain")),
       h("div", { class: "ch-wxwear" }, h("b", null, "What to wear"), h("ul", null, tips.length ? tips.map((x) => h("li", null, x)) : h("li", null, "No forecast numbers yet."))),
       h("p", { class: "ch-sub" }, "Updated " + (d.fetchedAt ? new Date(d.fetchedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "just now") + (d.source ? " · " + d.source : "") + "."));
   }
