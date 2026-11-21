@@ -8,6 +8,12 @@ The app is one web page (`www/index.html`) wrapped as a native iOS and Android a
 
 https://scotterotty.github.io/local-weather/
 
+Everything in the app works in a browser, on a phone or a computer, except the Android home-screen widget:
+
+- **Install it:** Chrome/Edge show an **Install** option (also under Settings > App in Sunnyloha); on iPhone use Safari > Share > Add to Home Screen. It gets its own icon and window, and long-pressing the icon on Android offers Sky, Learn and Music shortcuts.
+- **Offline:** a service worker (`www/sw.js`, browser only) keeps the page, scripts, fonts and icons, so it opens with no connection and shows the last forecast. Weather requests always go to the network.
+- **Weather DJ:** signs in to Spotify with a redirect back to the page itself, stores its state in `localStorage`, and switches playlists by the same rules as the Android worker, but only while the page is open. The web redirect (`https://scotterotty.github.io/local-weather/`, plus `http://127.0.0.1:8080/` for local testing) must be added to the Spotify developer app's Redirect URIs next to `com.scotterotty.localweather://spotify`.
+
 ## How updates reach the phone
 
 The Android app loads the app's screens from the web version (GitHub Pages), so any change to `www/` shows up on the phone a minute or two after it's pushed. No reinstall. The version and time at the bottom of the app show which update you're on. Only native changes (the home-screen widget, permissions, app icon) need a new APK. Without internet the app shows a "No connection" screen with a retry button.

@@ -1,13 +1,22 @@
 {
-  "name": "Local Weather",
+  "id": "./",
+  "name": "Sunnyloha",
   "short_name": "Sunnyloha",
+  "description": "Hyper-local weather from the National Weather Service, with the night sky, weather words explained, and a soundtrack for the sky.",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#eef3f6",
   "theme_color": "#0f2a3d",
+  "categories": ["weather", "education"],
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
     { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Sky tonight", "short_name": "Sky", "url": "./#sky", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Learn", "url": "./#learn", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Music for the weather", "short_name": "Music", "url": "./#music", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] }
   ]
 }
