@@ -25,13 +25,18 @@ public class WidgetRefreshReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         final Context ctx = context.getApplicationContext();
         if (ACTION_TAP.equals(intent.getAction())) showUpdating(ctx);
-        final PendingResult pending = goAsync();
+        updateAsync(ctx, goAsync());
+    }
+
+    /** Fetch on a background thread while the broadcast is kept alive (goAsync), then let it finish. */
+    static void updateAsync(Context context, final PendingResult pending) {
+        final Context ctx = context.getApplicationContext();
         new Thread(() -> {
             try {
                 WidgetUpdateWorker.update(ctx);
             } catch (Exception ignored) {
             } finally {
-                pending.finish();
+                if (pending != null) pending.finish();
             }
         }).start();
     }

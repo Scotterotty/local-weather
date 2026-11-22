@@ -86,7 +86,7 @@ public class WidgetUpdateWorker extends Worker {
         WorkManager.getInstance(ctx).cancelUniqueWork(PERIODIC);
     }
 
-    private static boolean hasWidgets(Context ctx) {
+    static boolean hasWidgets(Context ctx) {
         AppWidgetManager m = AppWidgetManager.getInstance(ctx);
         return m.getAppWidgetIds(new ComponentName(ctx, WeatherWidget.class)).length > 0;
     }
@@ -549,7 +549,9 @@ public class WidgetUpdateWorker extends Worker {
             if (s.loC != null) hl.append(hl.length() > 0 ? "  " : "").append("L ").append(fmt(s.loC, useC));
             v.setTextViewText(R.id.w_hilo, hl.toString());
             String when = DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date(s.time));
-            v.setTextViewText(R.id.w_updated, (s.station != null ? s.station + " · " : "") + when + "  ↻");
+            // Over an hour old means the last refresh failed or Android held it back: say so instead of looking current.
+            boolean stale = s.time > 0 && now - s.time > 60 * 60 * 1000L;
+            v.setTextViewText(R.id.w_updated, stale ? "⚠ Old · " + when + "  ↻" : (s.station != null ? s.station + " · " : "") + when + "  ↻");
 
             // Wind, humidity, air quality and UV, with a colored dot for the level (same colors as the app)
             SpannableStringBuilder air = new SpannableStringBuilder();
@@ -570,9 +572,11 @@ public class WidgetUpdateWorker extends Worker {
 
             // Next few hours, each with its own sky icon
             SimpleDateFormat hourFmt = new SimpleDateFormat("h a", Locale.getDefault());
-            int count = 0;
+            int count = 0, skip = 0;   // cached data: drop hours that have already ended
+            while (skip < s.hours.length() && s.hours.optJSONObject(skip) != null
+                && s.hours.optJSONObject(skip).optLong("t") + 60 * 60 * 1000L <= now) skip++;
             for (int i = 0; i < HOURS; i++) {
-                JSONObject hr = s.hours.optJSONObject(i);
+                JSONObject hr = s.hours.optJSONObject(i + skip);
                 if (hr == null) {
                     for (int k = 0; k < 3; k++) v.setTextViewText(HOUR_IDS[i][k], "");
                     continue;
