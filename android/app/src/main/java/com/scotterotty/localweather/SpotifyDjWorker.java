@@ -149,11 +149,15 @@ public class SpotifyDjWorker extends Worker {
         String part = partOfDay(Calendar.getInstance().get(Calendar.HOUR_OF_DAY));
         String mood = sky + "/" + part;
         String oldSky = dj.optString("sky", "");
-        boolean newPart = !part.equals(dj.optString("part", ""));
+        boolean sunday = isSunday();
+        // Sunday starting or ending counts like a new part of the day (Sundays are instrumental classical only).
+        boolean newPart = !part.equals(dj.optString("part", "")) || sunday != dj.optBoolean("sunday", false);
         // New music when the conditions outside change, or at a new part of the day (morning, afternoon, evening, night).
         // Forecast chances never change it.
         if (sky.equals(oldSky) && !newPart) { dj.remove("pending"); log(ctx, dj, sky, "same as before, no change"); return; }
-        String why = newPart ? "it's now " + ("night".equals(part) ? "night" : "the " + part) : "conditions changed";
+        boolean newDay = sunday != dj.optBoolean("sunday", false);
+        String why = newDay ? (sunday ? "it's Sunday" : "Sunday is over")
+            : newPart ? "it's now " + ("night".equals(part) ? "night" : "the " + part) : "conditions changed";
 
         if (p == null) {
             // Nothing of ours is playing: just keep the ready-to-play pick current, so Play starts the right music.
@@ -163,6 +167,7 @@ public class SpotifyDjWorker extends Worker {
             dj.put("playlistName", pl.optString("name"));
             dj.put("sky", sky);
             dj.put("part", part);
+            dj.put("sunday", sunday);
             dj.put("mood", mood);
             dj.remove("pending");
             dj.remove("next");
@@ -183,7 +188,7 @@ public class SpotifyDjWorker extends Worker {
         JSONObject item = p.optJSONObject("item");
         long left = item == null ? 0 : item.optLong("duration_ms") - p.optLong("progress_ms");
         JSONObject next = new JSONObject().put("uri", pl.getString("uri")).put("name", pl.optString("name"))
-            .put("sky", sky).put("part", part).put("track", item == null ? "" : item.optString("id"));
+            .put("sky", sky).put("part", part).put("sunday", sunday).put("track", item == null ? "" : item.optString("id"));
         dj.put("next", next);
         dj.remove("pending");
         log(ctx, dj, sky, why + "; switching to " + pl.optString("name") + " when this song ends");
@@ -209,6 +214,7 @@ public class SpotifyDjWorker extends Worker {
         dj.put("playlistName", next.optString("name"));
         dj.put("sky", next.optString("sky"));
         dj.put("part", next.optString("part"));
+        dj.put("sunday", next.optBoolean("sunday", false));
         dj.put("mood", next.optString("sky") + "/" + next.optString("part"));
         dj.remove("next");
         dj.put("nowPlaying", new JSONObject().put("at", System.currentTimeMillis()).put("playing", true).put("context", uri));
@@ -263,15 +269,25 @@ public class SpotifyDjWorker extends Worker {
         return String.format(Locale.US, "%04d-%02d-%02d", c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH));
     }
 
+    /** Same as isSunday() in soundtrack.js: the phone's local day. */
+    private static boolean isSunday() {
+        return Calendar.getInstance().get(Calendar.DAY_OF_WEEK) == Calendar.SUNDAY;
+    }
+
     /** The playlist the app's Soundtrack card picked for this part of the day (if it was picked for this sky), else a search. */
     private static JSONObject pickFor(Context ctx, JSONObject dj, String sky, String part) throws Exception {
+        boolean sunday = isSunday();
         JSONObject blocks = dj.optJSONObject("blocks");
         JSONObject card = blocks == null ? null : blocks.optJSONObject(blockDay() + "/" + part);
         String current = dj.optString("context");
-        if (card != null && sky.equals(card.optString("sky")) && !card.optString("uri").isEmpty() && !card.optString("uri").equals(current)) {
+        if (card != null && sky.equals(card.optString("sky")) && card.optBoolean("sunday", false) == sunday
+                && !card.optString("uri").isEmpty() && !card.optString("uri").equals(current)) {
             return new JSONObject().put("uri", card.getString("uri")).put("name", card.optString("name"));
         }
-        JSONObject styles = dj.optJSONObject("styles");
+        // On Sundays, only the Sunday (instrumental classical) searches. If the app hasn't saved them yet, pick nothing
+        // rather than a weekday playlist.
+        if (sunday && dj.optJSONObject("sundayStyles") == null) return null;
+        JSONObject styles = dj.optJSONObject(sunday ? "sundayStyles" : "styles");
         JSONObject bySky = styles == null ? null : styles.optJSONObject(sky);
         String query = bySky == null ? null : bySky.optString(part, null);
         return query == null ? null : findPlaylist(ctx, dj, query, current);

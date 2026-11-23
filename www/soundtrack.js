@@ -98,7 +98,49 @@ const SOUNDTRACKS = {
 const HOT = ["Surf rock and sunny psych", ["Khruangbin", "Allah-Las", "The Growlers"], "Laid-back, reverb-heavy guitars for a hot afternoon."];
 const COLD_CLEAR = ["Nordic folk and post-rock", ["Agnes Obel", "Sigur Rós", "Efterklang"], "Crisp and clear, like cold, bright air."];
 
-function pickSoundtrack(sky, part, avgC) {
+// Sundays: instrumental Baroque and classical only. Same shape as above, plus the Spotify search to use.
+const SUNDAY = {
+  storm: {
+    any: ["Stormy Baroque strings", ["Vivaldi (Summer, from The Four Seasons)", "Vivaldi (La tempesta di mare)", "Geminiani (La Follia)"], "Racing, fierce strings. Vivaldi wrote a thunderstorm right into Summer.", "Vivaldi Four Seasons Summer storm instrumental"],
+    night: ["Baroque organ", ["Bach (Toccata and Fugue in D minor)", "Buxtehude", "Pachelbel"], "Deep organ pipes that rumble along with the thunder.", "Bach organ works"]
+  },
+  rain: {
+    morning: ["Bach for solo cello", ["Bach (Cello Suites)", "Marin Marais", "Vivaldi (cello sonatas)"], "One warm, low instrument for a grey, wet morning.", "Bach cello suites"],
+    afternoon: ["Baroque chamber music", ["Handel (Water Music)", "Corelli (trio sonatas)", "Telemann"], "Small groups of strings and harpsichord, steady as the rain.", "Baroque chamber music instrumental"],
+    evening: ["Gentle classical piano", ["Chopin (Raindrop Prelude, Nocturnes)", "Schubert (Impromptus)", "Beethoven (Moonlight Sonata)"], "Quiet piano that sounds like rain on the window.", "calm classical piano"],
+    night: ["Bach on piano", ["Bach (Goldberg Variations)", "Bach (Well-Tempered Clavier)", "Glenn Gould"], "Calm, even lines for a long rainy night.", "Bach Goldberg Variations piano"]
+  },
+  snow: {
+    any: ["Wintry Baroque", ["Vivaldi (Winter, from The Four Seasons)", "Corelli (Christmas Concerto)", "Pachelbel (Canon in D)"], "Crisp strings for a hushed, snowy day. Vivaldi's Winter even has icy footsteps in it.", "Baroque winter instrumental"],
+    evening: ["Classical piano by the fire", ["Debussy (The Snow Is Dancing)", "Schumann (Scenes from Childhood)", "Mozart (piano sonatas)"], "Gentle piano pieces for a snowy evening indoors.", "classical piano winter evening"]
+  },
+  fog: {
+    any: ["Slow Baroque adagios", ["Albinoni (Adagio in G minor)", "Bach (Air on the G String)", "Pachelbel (Canon in D)"], "Slow, soft-edged strings with no hurry in them, like the fog.", "Baroque adagio"],
+    evening: ["Impressionist classical", ["Debussy (Clair de lune)", "Ravel (Pavane)", "Erik Satie (Gymnopédies)"], "Hazy, drifting piano and strings that blur at the edges.", "Debussy Satie Ravel piano"]
+  },
+  cloudy: {
+    morning: ["String quartets", ["Haydn", "Mozart", "Boccherini"], "Four quiet strings in conversation, for a soft, grey start.", "classical string quartets"],
+    afternoon: ["Baroque lute and guitar", ["Bach (lute suites)", "Sylvius Leopold Weiss", "Gaspar Sanz"], "Plucked strings that keep things warm under a muted sky.", "Baroque lute guitar"],
+    evening: ["Pastoral symphonies", ["Beethoven (Pastoral Symphony)", "Dvořák (Symphony No. 8)", "Brahms"], "Big, warm orchestras under a low ceiling of clouds.", "Beethoven Pastoral Symphony"],
+    night: ["Classical nocturnes", ["Chopin (Nocturnes)", "John Field", "Fauré"], "Night music for piano, quiet and glowing.", "Chopin nocturnes"]
+  },
+  partly: {
+    morning: ["Bright Classical era", ["Mozart (Eine kleine Nachtmusik)", "Haydn", "Boccherini"], "Light and cheerful, like sun breaking through now and then.", "Mozart Haydn instrumental"],
+    afternoon: ["Impressionist classical", ["Claude Debussy", "Erik Satie", "Maurice Ravel"], "Music written to paint shifting light, just like a sky of sun and clouds.", "Debussy Satie Ravel piano"],
+    evening: ["Baroque harpsichord", ["Bach (French Suites)", "Domenico Scarlatti", "Couperin"], "Sparkling keyboard music to wind the day down.", "Baroque harpsichord"],
+    night: ["Classical nocturnes", ["Chopin (Nocturnes)", "John Field", "Fauré"], "Night music for piano, for a night with a few clouds drifting by.", "Chopin nocturnes"]
+  },
+  clear: {
+    morning: ["Bright Baroque", ["Vivaldi (Spring, from The Four Seasons)", "Bach (Brandenburg Concertos)", "Handel"], "Lively strings for a clear, sunny start.", "Bach Brandenburg Vivaldi Spring"],
+    afternoon: ["Baroque trumpets", ["Handel (Music for the Royal Fireworks)", "Telemann (trumpet concertos)", "Torelli"], "Bright trumpets and timpani for a blue sky.", "Baroque trumpet concertos"],
+    evening: ["Serenades for strings", ["Mozart (serenades)", "Tchaikovsky (Serenade for Strings)", "Dvořák (Serenade for Strings)"], "Warm strings to watch a clear sunset to.", "serenade for strings"],
+    night: ["Moonlit piano", ["Beethoven (Moonlight Sonata)", "Debussy (Clair de lune)", "Chopin (Nocturnes)"], "Piano for looking up at a clear, starry sky.", "moonlight classical piano"]
+  }
+};
+const isSunday = (time = new Date()) => time.getDay() === 0;   // the phone's local day
+
+function pickSoundtrack(sky, part, avgC, sunday) {
+  if (sunday) { const s = SUNDAY[sky]; return s[part] || s.any; }
   if (part === "afternoon" && (sky === "clear" || sky === "partly") && avgC >= 29) return HOT;
   if (part !== "night" && sky === "clear" && avgC <= 4) return COLD_CLEAR;
   const s = SOUNDTRACKS[sky];
@@ -141,6 +183,8 @@ function moodQuery(sky, part, style) {
   const mood = sky === "clear" && night ? "" : SKY_MOOD[sky];
   return `${mood} ${style.replace(/ and /, " ").replace(/ \(.*\)/, "")}`.trim();
 }
+// The search for a pick: its own (Sunday picks carry one), or the mood + style.
+const pickQuery = (sky, part, pick) => pick[3] || moodQuery(sky, part, pick[0]);
 
 function soundtrackHtml(d) {
   if (!d?.hourly?.length) return "";
@@ -153,20 +197,21 @@ function soundtrackHtml(d) {
     const temps = g.hours.map((h) => h.tempC).filter((x) => x != null);
     const avgC = temps.length ? temps.reduce((a, x) => a + x, 0) / temps.length : 15;
     const pop = Math.max(0, ...g.hours.map((h) => h.pop || 0));
-    const [style, artists, why] = pickSoundtrack(sky, g.part, avgC);
+    const sunday = isSunday(g === parts[0] ? new Date() : g.hours[0].time);
+    const pick = pickSoundtrack(sky, g.part, avgC, sunday), [style, artists, why] = pick;
     if (!peek) { peek = `${esc(g.name)}: ${esc(style)}`; window.soundtrackBrief = { name: g.name, style }; }
     const night = g.part === "night" || g.part === "evening";
     const skyWord = { storm: "Storms", rain: "Rain", snow: "Snow", fog: "Fog", cloudy: "Cloudy", partly: night ? "Some clouds" : "Partly sunny", clear: night ? "Clear" : "Sunny" }[sky];
     const weather = `${skyWord}${WET.includes(sky) && pop >= 30 ? ` (${Math.round(pop)}%)` : ""}, around ${t(avgC)}${possibleNote(g.hours, sky)}`;
     // Spotify's playlist search for the style plus the mood. Opens the Spotify app on Android.
-    const q = encodeURIComponent(moodQuery(sky, g.part, style));
+    const q = encodeURIComponent(pickQuery(sky, g.part, pick));
     return `<div class="track">
       <div class="track-when"><b>${esc(g.name)}</b><span>${esc(weather)}</span></div>
       <div class="track-style">${esc(style)}</div>
       <p>${esc(why)}</p>
       <p class="track-artists">Try ${artists.map(esc).join(", ")}</p>
       <p class="track-pl"></p>
-      <p class="track-links"><a class="spotify" data-q="${esc(decodeURIComponent(q))}" data-block="${g.dayKey}/${g.part}" data-sky="${sky}" href="https://open.spotify.com/search/${q}" target="_blank" rel="noopener">Find on Spotify</a><a href="https://music.youtube.com/search?q=${q}" target="_blank" rel="noopener">YouTube Music</a></p>
+      <p class="track-links"><a class="spotify" data-q="${esc(decodeURIComponent(q))}" data-block="${g.dayKey}/${g.part}" data-sky="${sky}"${sunday ? ' data-sunday="1"' : ""} href="https://open.spotify.com/search/${q}" target="_blank" rel="noopener">Find on Spotify</a><a href="https://music.youtube.com/search?q=${q}" target="_blank" rel="noopener">YouTube Music</a></p>
     </div>`;
   });
   // The part of the day you're in now, with the rest of today and tomorrow one tap away.
@@ -210,7 +255,7 @@ async function linkPlaylists() {
       if (!found) continue;
       pl = cache[q] = { id: found.id || found.uri.split(":").pop(), name: found.name };
     }
-    blocks[a.dataset.block] = { sky: a.dataset.sky, q, uri: `spotify:playlist:${pl.id}`, name: pl.name };
+    blocks[a.dataset.block] = { sky: a.dataset.sky, sunday: !!a.dataset.sunday, q, uri: `spotify:playlist:${pl.id}`, name: pl.name };
     a.href = `https://open.spotify.com/playlist/${encodeURIComponent(pl.id)}`;
     a.textContent = "Open playlist on Spotify";
     a.title = pl.name;

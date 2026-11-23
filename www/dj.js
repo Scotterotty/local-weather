@@ -97,11 +97,12 @@ async function findPlaylist(query, avoid) {
 }
 
 // What every sky/part combination should search for, so the background worker uses the same picks as this screen.
-function djStyles() {
+// sunday = true gives the Sunday searches (saved as sundayStyles for the background worker).
+function djStyles(sunday = false) {
   const out = {};
   for (const sky of ["storm", "rain", "snow", "fog", "cloudy", "partly", "clear"]) {
     out[sky] = {};
-    for (const part of ["morning", "afternoon", "evening", "night"]) out[sky][part] = moodQuery(sky, part, pickSoundtrack(sky, part, 15)[0]);
+    for (const part of ["morning", "afternoon", "evening", "night"]) out[sky][part] = pickQuery(sky, part, pickSoundtrack(sky, part, 15, sunday));
   }
   return out;
 }
@@ -110,43 +111,44 @@ function djStyles() {
 function moodNow() {
   const part = partOf(new Date().getHours());
   const sky = skyKind(lastData?.current?.desc);   // what's observed right now, never forecast chances
-  return { sky, part };
+  return { sky, part, sunday: isSunday() };
 }
 
 // While nothing is playing, keep the ready-to-play pick in step with the weather and time of day
 // (the background switcher only acts while the DJ's playlist is playing).
 // The playlist for this part of the day: the one its Soundtrack card shows, if the card was picked for the same
 // sky we have now; otherwise a fresh search for this sky + part of day.
-async function pickFor(dj, sky, part, avoid) {
+async function pickFor(dj, sky, part, avoid, sunday = isSunday()) {
   const card = dj.blocks?.[`${blockDay(new Date())}/${part}`];
-  if (card?.uri && card.sky === sky && card.uri !== avoid) return { uri: card.uri, name: card.name };
-  return findPlaylist(djStyles()[sky][part], avoid);
+  if (card?.uri && card.sky === sky && !!card.sunday === sunday && card.uri !== avoid) return { uri: card.uri, name: card.name };
+  return findPlaylist(djStyles(sunday)[sky][part], avoid);
 }
 
 async function djRefreshPick(dj) {
   if (!lastData) return dj;
-  const { sky, part } = moodNow();
-  // New music when the conditions change, or when morning turns to afternoon, afternoon to evening, and so on.
-  if (dj.sky === sky && dj.part === part) return dj;
-  const styles = djStyles();
-  const pl = await pickFor(dj, sky, part, dj.context).catch(() => null);
+  const { sky, part, sunday } = moodNow();
+  // New music when the conditions change, when morning turns to afternoon, afternoon to evening, and so on,
+  // and when Sunday starts or ends.
+  if (dj.sky === sky && dj.part === part && !!dj.sunday === sunday) return dj;
+  const styles = djStyles(), sundayStyles = djStyles(true);
+  const pl = await pickFor(dj, sky, part, dj.context, sunday).catch(() => null);
   if (!pl) return dj;
-  return djSave({ styles, sky, part, mood: `${sky}/${part}`, context: pl.uri, playlistName: pl.name, pending: null, next: null });
+  return djSave({ styles, sundayStyles, sky, part, sunday, mood: `${sky}/${part}`, context: pl.uri, playlistName: pl.name, pending: null, next: null });
 }
 
 async function djStart() {
   djMsg = "Starting…"; renderDJ();
   try {
-    const { sky, part } = moodNow();
-    const styles = djStyles();
-    const pl = await pickFor(await djLoad(), sky, part);
+    const { sky, part, sunday } = moodNow();
+    const styles = djStyles(), sundayStyles = djStyles(true);
+    const pl = await pickFor(await djLoad(), sky, part, undefined, sunday);
     if (!pl) throw new Error("Couldn't find a playlist for this weather. Try again in a moment.");
     const devs = (await spotify("GET", "/me/player/devices"))?.devices || [];
     const dev = devs.find((d) => d.is_active) || devs.find((d) => d.type === "Smartphone") || devs[0];
     if (!dev) throw new Error("Open the Spotify app first (it just needs to be open), then tap Start again.");
     await spotify("PUT", `/me/player/play?device_id=${encodeURIComponent(dev.id)}`, { context_uri: pl.uri });
     spotify("PUT", `/me/player/shuffle?state=true&device_id=${encodeURIComponent(dev.id)}`).catch(() => {});
-    await djSave({ on: true, styles, sky, part, mood: `${sky}/${part}`, context: pl.uri, playlistName: pl.name, pending: null, next: null, startedAt: Date.now() });
+    await djSave({ on: true, styles, sundayStyles, sky, part, sunday, mood: `${sky}/${part}`, context: pl.uri, playlistName: pl.name, pending: null, next: null, startedAt: Date.now() });
     djMsg = "";
   } catch (e) { djMsg = e.message; }
   renderDJ();
