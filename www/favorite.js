@@ -343,13 +343,23 @@ function countdown(kind, d) {
   return { isPct, rows, next: next && { name: dayName(next.x), inDays: inDays(next.x), desc: next.x.desc } };
 }
 
+// For the 7-day forecast: the days your favorite weather has a real chance, so they can be marked there.
+function favDayKeys(d) {
+  const kind = store.get(FAV_KEY), f = FAVS[kind];
+  if (!f || !d?.days?.length) return null;
+  try {
+    const cd = countdown(kind, d);
+    return { name: f.name, keys: new Set(cd.rows.filter(({ c }) => cd.isPct ? c.pct >= 30 : c.says).map(({ x }) => x.key)) };
+  } catch { return null; }
+}
+
 // ---------- rendering ----------
 function favHtml(d) {
   const kind = store.get(FAV_KEY);
   const f = FAVS[kind];
   const picker = `<div class="chips fav-pick" role="group" aria-label="Pick your favorite weather">${FAV_ORDER.map((k) => `<button type="button" class="chip" data-fav="${k}" aria-pressed="${k === kind}">${iconFor(FAVS[k].icon, true)}${FAVS[k].name}</button>`).join("")}</div>`;
   if (!f || fav.picking) {
-    return `<details class="alm-all" data-sec="fav"${secOpen("fav")}><summary><h2 class="label">Your weather</h2></summary>
+    return `<details class="alm-all" data-sec="fav"${secOpen("fav")}>${secSummary("Your weather", f ? esc(f.name) : "Pick your favorite kind of weather")}
       <p class="fav-intro">${f ? "Pick a different favorite." : "What's your favorite kind of weather? Pick one to see how it forms, what today's readings say about it, a countdown to the next chance, and streaks counted from what really happened."}</p>
       ${picker}
       ${f ? `<div class="word-more"><button type="button" id="favCancel">Keep ${esc(f.name.toLowerCase())}</button></div>` : ""}
@@ -412,7 +422,10 @@ function favHtml(d) {
       </div>`).join("")}</div>
       <p class="fav-note">${toward} of ${clues.length} clues point toward ${esc(f.noun)} right now. Clues aren't a forecast, but they're what forecasters look at first.</p>` : "";
 
-  return `<details class="alm-all" data-sec="fav"${secOpen("fav")}><summary><h2 class="label">Your weather</h2></summary>
+  // Peek: the favorite, when it's next likely, and the current streak.
+  const peekStreak = fav.hist?.days?.length ? (() => { try { const s = streakInfo(kind, fav.hist).streak; return s ? `${s}-day streak` : ""; } catch { return ""; } })() : "";
+  const peek = [esc(f.name), cd.next ? `next ${cd.next.inDays > 1 ? `in ${cd.next.inDays} days` : esc(cd.next.name.toLowerCase())}` : "none in the 7-day", peekStreak].filter(Boolean).join(" · ");
+  return `<details class="alm-all" data-sec="fav"${secOpen("fav")}>${secSummary("Your weather", peek)}
     <div class="fav-title">${iconFor(f.icon, true).replace('class="icon"', 'class="icon lg"')}<span>${esc(f.name)}</span><button type="button" id="favChange">Change</button></div>
     <div class="fav-cd">${cdText}</div>
     ${cdRow}
