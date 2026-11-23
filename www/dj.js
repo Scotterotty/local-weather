@@ -152,33 +152,75 @@ async function djStart() {
     const styles = djStyles();
     const pl = await pickFor(await djLoad(), sky, part);
     if (!pl) throw new Error("Couldn't find a playlist for this weather. Try again in a moment.");
-    const devs = (await spotify("GET", "/me/player/devices"))?.devices || [];
-    const dev = devs.find((d) => d.is_active) || devs.find((d) => d.type === "Smartphone") || devs[0];
-    if (!dev) throw new Error("Open the Spotify app first (it just needs to be open), then tap Start again.");
-    await spotify("PUT", `/me/player/play?device_id=${encodeURIComponent(dev.id)}`, { context_uri: pl.uri });
-    spotify("PUT", `/me/player/shuffle?state=true&device_id=${encodeURIComponent(dev.id)}`).catch(() => {});
     await djSave({ on: true, styles, sky, part, mood: `${sky}/${part}`, context: pl.uri, playlistName: pl.name, pending: null, next: null, startedAt: Date.now() });
-    djMsg = "";
+    djMsg = await playOnPhone(pl.uri) ? "" : DJ_WAKING;
   } catch (e) { djMsg = e.message; }
   renderDJ();
 }
-// Play (or resume) the DJ's current playlist without picking a new one; Pause pauses Spotify.
-async function pickDevice() {
-  const devs = (await spotify("GET", "/me/player/devices"))?.devices || [];
-  const dev = devs.find((d) => d.is_active) || devs.find((d) => d.type === "Smartphone") || devs[0];
-  if (!dev) throw new Error("Open the Spotify app first (it just needs to be open), then tap Play again.");
-  return dev;
+// Spotify's list of devices only includes the phone while its Spotify app is awake as a "Connect" device.
+// Android puts an idle Spotify to sleep within a minute or so of leaving it, even though it still looks open in
+// the recent-apps list, so the list often comes back empty. Ask a few times (it can take a moment to show up),
+// then wake Spotify by opening the playlist in it and start playing as soon as the phone shows up.
+const DJ_WAKING = "Opening Spotify to wake it up. The music will start in a moment. If it doesn't, come back here and tap Play.";
+const djSleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function findDevice(tries = 3) {
+  for (let i = 0; i < tries; i++) {
+    const devs = ((await spotify("GET", "/me/player/devices"))?.devices || []).filter((d) => !d.is_restricted);
+    const dev = devs.find((d) => d.is_active) || devs.find((d) => d.type === "Smartphone") || devs[0];
+    if (dev) return dev;
+    if (i < tries - 1) await djSleep(1500);
+  }
+  return null;
 }
+async function playOn(dev, uri) {
+  await spotify("PUT", `/me/player/play?device_id=${encodeURIComponent(dev.id)}`, { context_uri: uri });
+  spotify("PUT", `/me/player/shuffle?state=true&device_id=${encodeURIComponent(dev.id)}`).catch(() => {});
+}
+let djWake = null;   // { uri, until } while we're waiting for a woken Spotify to show up
+// Plays now if Spotify is reachable (true). Otherwise opens Spotify and keeps trying for a while (false).
+async function playOnPhone(uri) {
+  const dev = await findDevice();
+  if (dev) { await playOn(dev, uri); return true; }
+  djWake = { uri, until: Date.now() + 180000 };
+  location.href = uri;   // spotify:playlist:… opens the Spotify app on this playlist, which wakes it up
+  finishWake();
+  return false;
+}
+// Keep looking for the woken phone. Runs while Spotify is in front if Android lets it, and again when you come back.
+let djWaking = false;
+async function finishWake() {
+  if (djWaking) return;
+  djWaking = true;
+  try {
+    while (djWake && Date.now() < djWake.until) {
+      await djSleep(2000);
+      const dev = await findDevice(1).catch(() => null);
+      if (dev && djWake) {
+        const uri = djWake.uri;
+        djWake = null;
+        await playOn(dev, uri);
+        djMsg = "";
+        setTimeout(renderDJ, 600);
+        return;
+      }
+    }
+    if (djWake) { djWake = null; djMsg = "Spotify didn't answer. Start any song in Spotify for a second, then come back and tap Play."; renderDJ(); }
+  } catch (e) { djWake = null; djMsg = e.message; renderDJ(); }
+  finally { djWaking = false; }
+}
+
+// Play (or resume) the DJ's current playlist without picking a new one; Pause pauses Spotify.
 async function djPlay() {
   try {
     const dj = await djLoad(), p = await spotify("GET", "/me/player").catch(() => null);
-    if (p && p.context?.uri === dj.context && !p.is_playing) await spotify("PUT", "/me/player/play");   // resume where it was
-    else if (!(p && p.context?.uri === dj.context && p.is_playing)) {
-      const dev = await pickDevice();
-      await spotify("PUT", `/me/player/play?device_id=${encodeURIComponent(dev.id)}`, { context_uri: dj.context });
-      spotify("PUT", `/me/player/shuffle?state=true&device_id=${encodeURIComponent(dev.id)}`).catch(() => {});
-    }
     djMsg = "";
+    if (p && p.context?.uri === dj.context && !p.is_playing) {
+      // Resume where it was; if Spotify has gone to sleep since, wake it and start the playlist.
+      try { await spotify("PUT", "/me/player/play"); }
+      catch (e) { if (e.status !== 404) throw e; if (!await playOnPhone(dj.context)) djMsg = DJ_WAKING; }
+    } else if (!(p && p.context?.uri === dj.context && p.is_playing)) {
+      if (!await playOnPhone(dj.context)) djMsg = DJ_WAKING;
+    }
   } catch (e) { djMsg = e.message; }
   setTimeout(renderDJ, 600);   // give Spotify a moment before reading the new state
 }
@@ -309,4 +351,4 @@ if (!DJ_NATIVE) {
 }
 djFinishSignIn();
 window.addEventListener("spotifyAuth", djFinishSignIn);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) { djFinishSignIn(); renderDJ(); if (!DJ_NATIVE) djWebCheck().catch(() => {}); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { djFinishSignIn(); if (djWake) finishWake(); renderDJ(); if (!DJ_NATIVE) djWebCheck().catch(() => {}); } });
