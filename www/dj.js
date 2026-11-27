@@ -97,11 +97,13 @@ async function findPlaylist(query, avoid) {
 }
 
 // What every sky/part combination should search for, so the background worker uses the same picks as this screen.
-function djStyles() {
+// sunday = true gives the Sunday searches (saved as sundayStyles for the background worker).
+// With seasonal picks on, these are this season's searches (still classical-only on Sundays).
+function djStyles(sunday = false) {
   const out = {};
   for (const sky of ["storm", "rain", "snow", "fog", "cloudy", "partly", "clear"]) {
     out[sky] = {};
-    for (const part of ["morning", "afternoon", "evening", "night"]) out[sky][part] = moodQuery(sky, part, pickSoundtrack(sky, part, 15)[0]);
+    for (const part of ["morning", "afternoon", "evening", "night"]) out[sky][part] = pickQuery(sky, part, picksFor(sky, part, 15, sunday).main);
   }
   return out;
 }
@@ -110,38 +112,49 @@ function djStyles() {
 function moodNow() {
   const part = partOf(new Date().getHours());
   const sky = skyKind(lastData?.current?.desc);   // what's observed right now, never forecast chances
-  return { sky, part };
+  return { sky, part, sunday: isSunday() };
 }
 
 // While nothing is playing, keep the ready-to-play pick in step with the weather and time of day
 // (the background switcher only acts while the DJ's playlist is playing).
 // The playlist for this part of the day: the one its Soundtrack card shows, if the card was picked for the same
 // sky we have now; otherwise a fresh search for this sky + part of day.
-async function pickFor(dj, sky, part, avoid) {
+async function pickFor(dj, sky, part, avoid, sunday = isSunday()) {
   const card = dj.blocks?.[`${blockDay(new Date())}/${part}`];
-  if (card?.uri && card.sky === sky && card.uri !== avoid) return { uri: card.uri, name: card.name };
-  return findPlaylist(djStyles()[sky][part], avoid);
+  if (card?.uri && card.sky === sky && !!card.sunday === sunday && card.uri !== avoid) return { uri: card.uri, name: card.name };
+  return findPlaylist(djStyles(sunday)[sky][part], avoid);
+}
+
+// Which set of searches the DJ should be using: this season's, or the weather-only ones.
+const djStyleKey = () => seasonalOn() ? seasonOf() : "weather";
+// When seasonal picks are switched on or off, or the season changes (say, the holidays end), save the new searches
+// for the background worker and drop the current mood, so the DJ picks new music (after the current song if playing).
+async function djSyncStyles() {
+  const dj = await djLoad();
+  if (!dj.refresh || dj.styleKey === djStyleKey()) return dj;
+  return djSave({ styles: djStyles(), sundayStyles: djStyles(true), styleKey: djStyleKey(), ...(dj.styleKey ? { sky: null } : {}) });
 }
 
 async function djRefreshPick(dj) {
   if (!lastData) return dj;
-  const { sky, part } = moodNow();
-  // New music when the conditions change, or when morning turns to afternoon, afternoon to evening, and so on.
-  if (dj.sky === sky && dj.part === part) return dj;
-  const styles = djStyles();
-  const pl = await pickFor(dj, sky, part, dj.context).catch(() => null);
+  const { sky, part, sunday } = moodNow();
+  // New music when the conditions change, when morning turns to afternoon, afternoon to evening, and so on,
+  // and when Sunday starts or ends.
+  if (dj.sky === sky && dj.part === part && !!dj.sunday === sunday) return dj;
+  const styles = djStyles(), sundayStyles = djStyles(true);
+  const pl = await pickFor(dj, sky, part, dj.context, sunday).catch(() => null);
   if (!pl) return dj;
-  return djSave({ styles, sky, part, mood: `${sky}/${part}`, context: pl.uri, playlistName: pl.name, pending: null, next: null });
+  return djSave({ styles, sundayStyles, styleKey: djStyleKey(), sky, part, sunday, mood: `${sky}/${part}`, context: pl.uri, playlistName: pl.name, pending: null, next: null });
 }
 
 async function djStart() {
   djMsg = "Starting…"; renderDJ();
   try {
-    const { sky, part } = moodNow();
-    const styles = djStyles();
-    const pl = await pickFor(await djLoad(), sky, part);
+    const { sky, part, sunday } = moodNow();
+    const styles = djStyles(), sundayStyles = djStyles(true);
+    const pl = await pickFor(await djLoad(), sky, part, undefined, sunday);
     if (!pl) throw new Error("Couldn't find a playlist for this weather. Try again in a moment.");
-    await djSave({ on: true, styles, sky, part, mood: `${sky}/${part}`, context: pl.uri, playlistName: pl.name, pending: null, next: null, startedAt: Date.now() });
+    await djSave({ on: true, styles, sundayStyles, styleKey: djStyleKey(), sky, part, sunday, mood: `${sky}/${part}`, context: pl.uri, playlistName: pl.name, pending: null, next: null, startedAt: Date.now() });
     djMsg = await playOnPhone(pl.uri) ? "" : DJ_WAKING;
   } catch (e) { djMsg = e.message; }
   renderDJ();
@@ -233,6 +246,7 @@ async function renderDJ() {
   const el = $("dj");
   if (!el) return;
   let dj = await djLoad();
+  if (dj.refresh) dj = await djSyncStyles().catch(() => dj);
   let body;
   if (!dj.clientId) {
     body = `<p>Got Spotify Premium? The Weather DJ plays a playlist that fits the weather, and when the sky changes it switches after the current song ends.</p>
