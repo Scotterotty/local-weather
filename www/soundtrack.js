@@ -139,6 +139,108 @@ const SUNDAY = {
 };
 const isSunday = (time = new Date()) => time.getDay() === 0;   // the phone's local day
 
+// ---------- Seasonal picks ----------
+// Music for the time of year, matched to the weather: each season has a pick for snow, wet (rain or storms),
+// grey (clouds or fog) and bright (sun) skies, plus one for evenings and nights. Each pick carries its own Spotify
+// search, like the Sunday ones. Seasons flip south of the equator; the holidays run from US Thanksgiving to Dec 31.
+const SEASONAL = {
+  holiday: {
+    name: "Holiday",
+    snow: ["Snowy holiday jazz", ["Vince Guaraldi Trio (A Charlie Brown Christmas)", "Ella Fitzgerald", "Nat King Cole"], "Warm piano jazz for snow falling outside the window.", "Vince Guaraldi Charlie Brown Christmas jazz"],
+    wet: ["Cozy holiday jazz", ["Chet Baker", "Ella Fitzgerald (Ella Wishes You a Swinging Christmas)", "Diana Krall"], "Soft, warm holiday standards for a wet, stay-inside day.", "cozy christmas jazz"],
+    grey: ["Indie holiday", ["Sufjan Stevens (Songs for Christmas)", "Low (Christmas)", "Phoebe Bridgers"], "Quiet, homemade-sounding holiday songs that suit a grey sky.", "indie christmas"],
+    bright: ["Classic holiday hits", ["The Ronettes", "Bing Crosby", "Stevie Wonder (Someday at Christmas)"], "Bright, bouncy holiday classics for a crisp, sunny day.", "classic christmas hits"],
+    night: ["Quiet Christmas piano", ["Vince Guaraldi", "George Winston (December)", "Ólafur Arnalds"], "Gentle piano for a dark, cozy night with the lights on.", "calm christmas piano"]
+  },
+  winter: {
+    name: "Winter",
+    snow: ["Winter piano", ["Ólafur Arnalds", "Ludovico Einaudi", "Erik Satie"], "Sparse piano that matches the hush snow puts over everything.", "winter piano"],
+    wet: ["Winter folk", ["Bon Iver (For Emma, Forever Ago)", "Agnes Obel", "Iron & Wine"], "Cold-rain songs written in cabins in the middle of winter.", "winter folk acoustic"],
+    grey: ["Nordic winter ambient", ["Sigur Rós", "Jóhann Jóhannsson", "Hammock"], "Slow, wide sounds from places with long grey winters.", "nordic winter ambient"],
+    bright: ["Crisp winter indie", ["Fleet Foxes", "Sufjan Stevens", "The Staves"], "Clear voices and bright guitars, like cold sunshine on snow.", "winter indie folk"],
+    night: ["Winter night jazz", ["Bill Evans", "Keith Jarrett", "Chet Baker"], "Soft late-night jazz for the longest, darkest nights of the year.", "winter night jazz"]
+  },
+  spring: {
+    name: "Spring",
+    wet: ["Spring rain folk", ["Nick Drake", "Adrianne Lenker", "José González"], "Gentle acoustic songs for warm spring showers.", "spring rain acoustic"],
+    grey: ["Soft spring indie", ["Big Thief", "Novo Amor", "The Paper Kites"], "Hopeful, soft songs for a mild cloudy day while things turn green.", "spring indie folk"],
+    bright: ["Spring indie pop", ["Vampire Weekend", "Belle & Sebastian", "Phoenix"], "Bouncy, sunny songs for the first really nice days.", "spring indie pop"],
+    night: ["Spring evening chill", ["Khruangbin", "Men I Trust", "Mild High Club"], "Warm, easy grooves for windows-open spring evenings.", "spring evening chill"]
+  },
+  summer: {
+    name: "Summer",
+    wet: ["Summer rain soul", ["Bill Withers", "Al Green", "Leon Bridges"], "Warm soul for a summer downpour on hot pavement.", "summer rain soul"],
+    grey: ["Summer haze dream pop", ["Beach House", "Alvvays", "Real Estate"], "Hazy, warm guitars for a muggy, overcast summer day.", "summer dream pop"],
+    bright: ["Summer sunshine", ["The Beach Boys", "Vampire Weekend", "Jack Johnson"], "Feel-good songs for a long, bright summer day.", "summer sunshine hits"],
+    night: ["Summer night disco", ["Chic", "Daft Punk", "Jungle"], "Warm-night grooves for when it's still warm after dark.", "summer night disco"]
+  },
+  fall: {
+    name: "Fall",
+    wet: ["Autumn rain jazz", ["Bill Evans (Autumn Leaves)", "Nat King Cole", "Chet Baker"], "Rainy-day jazz with falling leaves in it.", "autumn rain jazz"],
+    grey: ["Autumn indie folk", ["Fleet Foxes", "Iron & Wine", "Big Thief"], "Warm acoustic songs for grey skies and turning leaves.", "autumn indie folk"],
+    bright: ["Golden-hour folk rock", ["Neil Young (Harvest)", "Fleetwood Mac", "The War on Drugs"], "Warm, golden songs for crisp, sunny fall days.", "autumn folk rock"],
+    night: ["Autumn night jazz", ["Bill Evans", "Miles Davis (Kind of Blue)", "Stan Getz"], "Smoky late-night jazz for cool fall nights.", "autumn night jazz"]
+  }
+};
+// Sundays stay instrumental Baroque and classical, so the seasonal Sunday picks are too (Vivaldi wrote one for each season).
+const SEASONAL_SUNDAY = {
+  holiday: {
+    snow: ["Vivaldi's Winter", ["Vivaldi (Winter, from The Four Seasons)", "Corelli (Christmas Concerto)", "Pachelbel (Canon in D)"], "Icy, shivering strings. Vivaldi put chattering teeth and slippery ice right into the music.", "Vivaldi Winter Four Seasons instrumental"],
+    wet: ["Vivaldi's Winter, by the fire", ["Vivaldi (Winter, slow movement)", "Corelli (Christmas Concerto, Pastorale)", "Bach (Air on the G String)"], "Vivaldi's Winter has a slow part about staying warm by the fire while the rain falls outside.", "Vivaldi Winter Four Seasons instrumental"],
+    day: ["Baroque Christmas concertos", ["Corelli (Christmas Concerto)", "Torelli (Christmas Concerto)", "Manfredini (Christmas Concerto)"], "Bright Baroque strings written for Christmas Eve, with no singing.", "Baroque Christmas concertos instrumental"],
+    night: ["The Nutcracker Suite", ["Tchaikovsky (The Nutcracker)", "Corelli (Christmas Concerto, Pastorale)", "Bach (Air on the G String)"], "Sparkly orchestra music for a holiday evening.", "Nutcracker Suite orchestra"]
+  },
+  winter: {
+    snow: ["Vivaldi's Winter", ["Vivaldi (Winter, from The Four Seasons)", "Bach (Cello Suites)", "Handel"], "Icy, shivering strings. Vivaldi put chattering teeth and slippery ice right into the music.", "Vivaldi Winter Four Seasons instrumental"],
+    wet: ["Vivaldi's Winter, by the fire", ["Vivaldi (Winter, slow movement)", "Bach (Cello Suites)", "Albinoni (Adagio)"], "Vivaldi's Winter has a slow part about sitting by the fire while the rain falls outside.", "Vivaldi Winter Four Seasons instrumental"],
+    day: ["Vivaldi's Winter", ["Vivaldi (Winter, from The Four Seasons)", "Bach (Brandenburg Concertos)", "Corelli"], "Crisp Baroque strings for a cold, clear winter day.", "Vivaldi Winter Four Seasons instrumental"],
+    night: ["Winter classical piano", ["Schubert (Impromptus)", "Chopin (Nocturnes)", "Bach (Goldberg Variations)"], "Quiet piano for a long winter night.", "winter classical piano"]
+  },
+  spring: {
+    wet: ["Spring rain piano", ["Chopin (Raindrop Prelude)", "Schubert (Impromptus)", "Mendelssohn (Spring Song)"], "Light piano for spring showers.", "classical piano spring rain"],
+    day: ["Vivaldi's Spring", ["Vivaldi (Spring, from The Four Seasons)", "Beethoven (Spring Sonata)", "Handel"], "Birdsong, a bubbling stream and a short spring thunderstorm, all played on violins.", "Vivaldi Spring Four Seasons instrumental"],
+    night: ["Spring serenades", ["Mozart (Eine kleine Nachtmusik)", "Dvořák (Serenade for Strings)", "Grieg (Holberg Suite)"], "Light, sweet strings for a mild spring evening.", "serenade for strings"]
+  },
+  summer: {
+    wet: ["Vivaldi's Summer storm", ["Vivaldi (Summer, from The Four Seasons)", "Geminiani", "Locatelli"], "Vivaldi's Summer ends in a wild thunderstorm, played on racing violins.", "Vivaldi Summer Four Seasons instrumental"],
+    day: ["Handel's Water Music", ["Handel (Water Music)", "Vivaldi (Summer, from The Four Seasons)", "Telemann"], "Written for a royal boat party on the river on a summer day.", "Handel Water Music"],
+    night: ["Summer night classical", ["Mozart (serenades)", "Debussy (Clair de lune)", "Beethoven (Moonlight Sonata)"], "Calm music for a warm, quiet summer night.", "summer night classical instrumental"]
+  },
+  fall: {
+    wet: ["Autumn rain cello", ["Bach (Cello Suites)", "Elgar (Cello Concerto)", "Vivaldi (cello sonatas)"], "A low, warm cello for a rainy autumn day.", "Bach cello suites"],
+    day: ["Vivaldi's Autumn", ["Vivaldi (Autumn, from The Four Seasons)", "Boccherini", "Haydn"], "A harvest party, a sleepy afternoon and a hunt, all told on violins.", "Vivaldi Autumn Four Seasons instrumental"],
+    night: ["Autumn evening strings", ["Tchaikovsky (Serenade for Strings)", "Elgar (Serenade for Strings)", "Barber (Adagio for Strings)"], "Rich, warm strings for cool fall evenings.", "romantic strings instrumental"]
+  }
+};
+
+// The fourth Thursday of November (US Thanksgiving), as a date in that year.
+function thanksgiving(year) {
+  const nov1 = new Date(year, 10, 1).getDay();
+  return new Date(year, 10, 1 + ((4 - nov1 + 7) % 7) + 21);
+}
+// Which season it is on a date. South of the equator the four seasons flip; the holidays stay in December.
+function seasonOf(date = new Date(), lat = (typeof current !== "undefined" && current?.lat) || 40) {
+  const m = date.getMonth(), day = new Date(date.getFullYear(), m, date.getDate());
+  if (day >= thanksgiving(date.getFullYear()) && m >= 10) return "holiday";
+  const s = ["spring", "summer", "fall", "winter"][Math.floor(((m + 10) % 12) / 3)];   // Mar-May, Jun-Aug, Sep-Nov, Dec-Feb
+  return lat >= 0 ? s : { spring: "fall", summer: "winter", fall: "spring", winter: "summer" }[s];
+}
+// Seasonal picks are on unless you turn them off in the Soundtrack panel.
+function seasonalOn() { try { return localStorage.getItem("lw.seasonal") !== "0"; } catch { return true; } }
+
+function pickSeasonal(sky, part, season, sunday) {
+  const night = part === "evening" || part === "night";
+  if (sunday) {
+    const s = SEASONAL_SUNDAY[season];
+    return (sky === "snow" && s.snow) || (WET.includes(sky) && s.wet) || (night ? s.night : s.day);
+  }
+  const s = SEASONAL[season];
+  if (sky === "snow") return s.snow || s.wet;
+  if (WET.includes(sky)) return s.wet;
+  if (night) return s.night;
+  return sky === "cloudy" || sky === "fog" ? s.grey : s.bright;
+}
+
 function pickSoundtrack(sky, part, avgC, sunday) {
   if (sunday) { const s = SUNDAY[sky]; return s[part] || s.any; }
   if (part === "afternoon" && (sky === "clear" || sky === "partly") && avgC >= 29) return HOT;
@@ -183,8 +285,19 @@ function moodQuery(sky, part, style) {
   const mood = sky === "clear" && night ? "" : SKY_MOOD[sky];
   return `${mood} ${style.replace(/ and /, " ").replace(/ \(.*\)/, "")}`.trim();
 }
-// The search for a pick: its own (Sunday picks carry one), or the mood + style.
+// The search for a pick: its own (Sunday and seasonal picks carry one), or the mood + style.
 const pickQuery = (sky, part, pick) => pick[3] || moodQuery(sky, part, pick[0]);
+
+// The pick a card leads with (and the Weather DJ plays), plus the other one as an alternative:
+// the seasonal pick when seasonal picks are on, otherwise the weather pick.
+function picksFor(sky, part, avgC, sunday, date = new Date()) {
+  const season = seasonOf(date);
+  const weather = pickSoundtrack(sky, part, avgC, sunday), seasonal = pickSeasonal(sky, part, season, sunday);
+  const label = SEASONAL[season].name;
+  return seasonalOn() ? { main: seasonal, alt: weather, mainLabel: label, altLabel: "Just for the weather", season }
+    : { main: weather, alt: seasonal, mainLabel: "", altLabel: `${label} pick`, season };
+}
+const searchLinks = (q, attrs = "") => `<a class="spotify"${attrs} data-q="${esc(q)}" href="https://open.spotify.com/search/${encodeURIComponent(q)}" target="_blank" rel="noopener">Find on Spotify</a><a href="https://music.youtube.com/search?q=${encodeURIComponent(q)}" target="_blank" rel="noopener">YouTube Music</a>`;
 
 function soundtrackHtml(d) {
   if (!d?.hourly?.length) return "";
@@ -198,20 +311,28 @@ function soundtrackHtml(d) {
     const avgC = temps.length ? temps.reduce((a, x) => a + x, 0) / temps.length : 15;
     const pop = Math.max(0, ...g.hours.map((h) => h.pop || 0));
     const sunday = isSunday(g === parts[0] ? new Date() : g.hours[0].time);
-    const pick = pickSoundtrack(sky, g.part, avgC, sunday), [style, artists, why] = pick;
+    const { main: pick, alt, mainLabel, altLabel } = picksFor(sky, g.part, avgC, sunday, g === parts[0] ? new Date() : g.hours[0].time);
+    const [style, artists, why] = pick;
     if (!peek) { peek = `${esc(g.name)}: ${esc(style)}`; window.soundtrackBrief = { name: g.name, style }; }
     const night = g.part === "night" || g.part === "evening";
     const skyWord = { storm: "Storms", rain: "Rain", snow: "Snow", fog: "Fog", cloudy: "Cloudy", partly: night ? "Some clouds" : "Partly sunny", clear: night ? "Clear" : "Sunny" }[sky];
     const weather = `${skyWord}${WET.includes(sky) && pop >= 30 ? ` (${Math.round(pop)}%)` : ""}, around ${t(avgC)}${possibleNote(g.hours, sky)}`;
     // Spotify's playlist search for the style plus the mood. Opens the Spotify app on Android.
-    const q = encodeURIComponent(pickQuery(sky, g.part, pick));
+    const q = pickQuery(sky, g.part, pick), altQ = pickQuery(sky, g.part, alt);
+    const altHtml = altQ === q ? "" : `<div class="track-alt">
+        <p><span class="track-tag">${esc(altLabel)}</span> <b>${esc(alt[0])}</b>: ${esc(alt[2])} Try ${alt[1].map(esc).join(", ")}.</p>
+        <p class="track-pl"></p>
+        <p class="track-links">${searchLinks(altQ)}</p>
+      </div>`;
     return `<div class="track">
       <div class="track-when"><b>${esc(g.name)}</b><span>${esc(weather)}</span></div>
+      ${mainLabel ? `<div class="track-tag">${esc(mainLabel)}${sunday ? " · Sunday classical" : ""}</div>` : ""}
       <div class="track-style">${esc(style)}</div>
       <p>${esc(why)}</p>
       <p class="track-artists">Try ${artists.map(esc).join(", ")}</p>
       <p class="track-pl"></p>
-      <p class="track-links"><a class="spotify" data-q="${esc(decodeURIComponent(q))}" data-block="${g.dayKey}/${g.part}" data-sky="${sky}"${sunday ? ' data-sunday="1"' : ""} href="https://open.spotify.com/search/${q}" target="_blank" rel="noopener">Find on Spotify</a><a href="https://music.youtube.com/search?q=${q}" target="_blank" rel="noopener">YouTube Music</a></p>
+      <p class="track-links">${searchLinks(q, ` data-block="${g.dayKey}/${g.part}" data-sky="${sky}"${sunday ? ' data-sunday="1"' : ""}`)}</p>
+      ${altHtml}
     </div>`;
   });
   // The part of the day you're in now, with the rest of today and tomorrow one tap away.
@@ -219,7 +340,8 @@ function soundtrackHtml(d) {
   return `<section class="panel soundtrack" aria-label="Soundtrack for your day">
     <details class="alm-all" data-sec="music"${secOpen("music")}>
       ${secSummary("Soundtrack for your day", peek)}
-      <p class="hint">Music picked to match the weather ahead.</p>
+      <p class="hint">Music picked to match the weather ahead${seasonalOn() ? ` and the time of year (${esc(SEASONAL[seasonOf()].name.toLowerCase())} season)` : ""}.</p>
+      <label class="track-season"><input type="checkbox" id="seasonalToggle"${seasonalOn() ? " checked" : ""}> Seasonal picks first</label>
       <div id="djSlot"></div>
       <div class="tracks">${rows}</div>
     </details>
@@ -232,8 +354,17 @@ function mountSoundtrack() {
   const html = soundtrackHtml(lastData);
   if (!html) { slot.remove(); return; }
   slot.outerHTML = html;
+  $("seasonalToggle")?.addEventListener("change", (e) => setSeasonal(e.target.checked));
   if (typeof mountDJ === "function") mountDJ();
   linkPlaylists();
+}
+
+// Switch seasonal picks on or off, redraw the cards, and give the Weather DJ the new searches.
+function setSeasonal(on) {
+  try { localStorage.setItem("lw.seasonal", on ? "1" : "0"); } catch { }
+  const panel = document.querySelector("#app > .soundtrack");
+  // Redrawing also redraws the Weather DJ, which hands it the new searches.
+  if (panel) { panel.outerHTML = `<div id="soundtrackSlot"></div>`; mountSoundtrack(); }
 }
 
 // With Spotify connected (Weather DJ), point each Spotify button straight at a real matching playlist instead
@@ -255,11 +386,11 @@ async function linkPlaylists() {
       if (!found) continue;
       pl = cache[q] = { id: found.id || found.uri.split(":").pop(), name: found.name };
     }
-    blocks[a.dataset.block] = { sky: a.dataset.sky, sunday: !!a.dataset.sunday, q, uri: `spotify:playlist:${pl.id}`, name: pl.name };
+    if (a.dataset.block) blocks[a.dataset.block] = { sky: a.dataset.sky, sunday: !!a.dataset.sunday, q, uri: `spotify:playlist:${pl.id}`, name: pl.name };
     a.href = `https://open.spotify.com/playlist/${encodeURIComponent(pl.id)}`;
     a.textContent = "Open playlist on Spotify";
     a.title = pl.name;
-    const name = a.closest(".track")?.querySelector(".track-pl");
+    const name = a.closest(".track-alt, .track")?.querySelector(".track-pl");
     if (name) name.textContent = `Playlist: ${pl.name}`;
   }
   try { localStorage.setItem("lw.plCache", JSON.stringify(cache)); } catch { }
