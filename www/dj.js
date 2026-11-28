@@ -90,10 +90,12 @@ async function spotify(method, path, body) {
 }
 
 // Best playlist for a search: real playlists with enough songs; a little variety among the top few.
-async function findPlaylist(query, avoid) {
-  const j = await spotify("GET", `/search?${new URLSearchParams({ q: query, type: "playlist", limit: "10" })}`);
-  const good = (j?.playlists?.items || []).filter((p) => p && p.uri !== avoid && (p.tracks?.total ?? p.items?.total ?? 30) >= 15);
-  return good[Math.floor(Math.random() * Math.min(3, good.length))] || null;
+// `avoid` is one playlist URI or a list of them (e.g. the ones played recently).
+async function findPlaylist(query, avoid, pool = 3) {
+  const skip = new Set([].concat(avoid || []));
+  const j = await spotify("GET", `/search?${new URLSearchParams({ q: query, type: "playlist", limit: "20" })}`);
+  const good = (j?.playlists?.items || []).filter((p) => p && !skip.has(p.uri) && (p.tracks?.total ?? p.items?.total ?? 30) >= 15);
+  return good[Math.floor(Math.random() * Math.min(pool, good.length))] || null;
 }
 
 // What every sky/part combination should search for, so the background worker uses the same picks as this screen.
@@ -147,14 +149,23 @@ async function djRefreshPick(dj) {
   return djSave({ styles, sundayStyles, styleKey: djStyleKey(), sky, part, sunday, mood: `${sky}/${part}`, context: pl.uri, playlistName: pl.name, pending: null, next: null });
 }
 
-async function djStart() {
-  djMsg = "Starting…"; renderDJ();
+// "New playlist" must never hand back the playlist that's already playing (it used to, which only restarted it
+// on a different shuffled song). Skip the current one and the last few, and look a bit further down the results.
+async function pickNew(dj, sky, part, sunday = isSunday()) {
+  const recent = [dj.context, ...(dj.recent || [])].filter(Boolean), q = djStyles(sunday)[sky][part];
+  return (await findPlaylist(q, recent, 6)) || findPlaylist(q, dj.context, 6);
+}
+
+async function djStart(fresh) {
+  djMsg = fresh ? "Finding another playlist…" : "Starting…"; renderDJ();
   try {
     const { sky, part, sunday } = moodNow();
     const styles = djStyles(), sundayStyles = djStyles(true);
-    const pl = await pickFor(await djLoad(), sky, part, undefined, sunday);
+    const dj = await djLoad();
+    const pl = fresh ? await pickNew(dj, sky, part, sunday) : await pickFor(dj, sky, part, undefined, sunday);
     if (!pl) throw new Error("Couldn't find a playlist for this weather. Try again in a moment.");
-    await djSave({ on: true, styles, sundayStyles, styleKey: djStyleKey(), sky, part, sunday, mood: `${sky}/${part}`, context: pl.uri, playlistName: pl.name, pending: null, next: null, startedAt: Date.now() });
+    const recent = [dj.context, ...(dj.recent || [])].filter((u) => u && u !== pl.uri).slice(0, 8);
+    await djSave({ on: true, styles, sundayStyles, styleKey: djStyleKey(), sky, part, sunday, mood: `${sky}/${part}`, context: pl.uri, playlistName: pl.name, recent, pending: null, next: null, startedAt: Date.now() });
     djMsg = await playOnPhone(pl.uri) ? "" : DJ_WAKING;
   } catch (e) { djMsg = e.message; }
   renderDJ();
@@ -267,13 +278,14 @@ async function renderDJ() {
     const id = (dj.context || "").split(":").pop();
     body = `<p><b>On.</b> ${playing ? "Playing" : "Ready to play"} <b>${esc(dj.playlistName || "a weather playlist")}</b> for ${esc(SKY_NOW[dj.sky] || "the weather right now")}${dj.part ? (dj.part === "night" ? " tonight" : ` this ${esc(dj.part)}`) : ""}.${playing && p.item ? ` Now: ${esc(p.item.name)} · ${esc((p.item.artists || []).map((a) => a.name).join(", "))}.` : ""} Changes with the weather and with the time of day (morning, afternoon, evening, night), after the song that's playing.</p>
       ${dj.lastCheck ? `<p class="hint">Last check ${esc(fmtTime(new Date(dj.lastCheck.at)))}${dj.lastCheck.sky ? `: ${esc(SKY_WORD[dj.lastCheck.sky] || dj.lastCheck.sky)}` : ""}, ${esc(dj.lastCheck.what)}.</p>` : ""}
-      <div class="dj-row">${playing ? `<button type="button" class="dj-go dj-pp" id="djPause">${DJ_ICON.pause}Pause</button>` : `<button type="button" class="dj-go dj-pp" id="djPlay">${DJ_ICON.play}Play</button>`}<button type="button" id="djStart">New playlist</button><button type="button" id="djStop">Turn off</button></div>
+      <div class="dj-row">${playing ? `<button type="button" class="dj-go dj-pp" id="djPause">${DJ_ICON.pause}Pause</button>` : `<button type="button" class="dj-go dj-pp" id="djPlay">${DJ_ICON.play}Play</button>`}<button type="button" id="djNew">New playlist</button><button type="button" id="djStop">Turn off</button></div>
       ${id ? `<p class="hint"><a href="https://open.spotify.com/playlist/${esc(id)}" target="_blank" rel="noopener">Open this playlist in Spotify</a> to follow or save it.</p>` : ""}`;
   }
   el.innerHTML = `<h3>Weather DJ</h3>${body}${djMsg ? `<p class="dj-msg">${esc(djMsg)}</p>` : ""}`;
   $("djIdForm")?.addEventListener("submit", async (e) => { e.preventDefault(); const v = $("djId").value.trim(); if (!/^[0-9a-f]{32}$/i.test(v)) { djMsg = "That doesn't look like a Client ID (32 letters and numbers)."; return renderDJ(); } djMsg = ""; await djSave({ clientId: v }); renderDJ(); });
   $("djConnect")?.addEventListener("click", djConnect);
-  $("djStart")?.addEventListener("click", djStart);
+  $("djStart")?.addEventListener("click", () => djStart(false));
+  $("djNew")?.addEventListener("click", () => djStart(true));
   $("djStop")?.addEventListener("click", djStop);
   $("djPlay")?.addEventListener("click", djPlay);
   $("djPause")?.addEventListener("click", djPause);
