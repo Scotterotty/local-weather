@@ -20,7 +20,8 @@ public class MainActivity extends BridgeActivity {
     public void onPause() {
         super.onPause();
         // The app may have just found a new location or changed units; bring the widget up to date.
-        WidgetUpdateWorker.refreshNow(this);
+        // Fetch directly rather than queueing a job: Battery Saver can hold jobs back for hours.
+        if (WidgetUpdateWorker.hasWidgets(this)) WidgetRefreshReceiver.updateAsync(this, null);
         // Weather DJ may have been turned on or off.
         SpotifyDjWorker.sync(this);
     }
