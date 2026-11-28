@@ -1,15 +1,26 @@
-// Weather DJ: plays a Spotify playlist that fits the weather, and (on Android) switches it when the weather
-// changes, at the end of the current song. Spotify Premium + a personal Spotify developer app (Client ID).
+// Weather DJ: plays a Spotify playlist that fits the weather, and switches it when the weather changes, at the end
+// of the current song. Spotify Premium + a personal Spotify developer app (Client ID).
 //
-// This file does sign-in (PKCE, no secret) and starting/stopping. The Android app's SpotifyDjWorker checks the
-// sky every 15 minutes in the background and does the switching. Both share one JSON blob, "lw.dj", stored with
+// This file does sign-in (PKCE, no secret) and starting/stopping. In the Android app, SpotifyDjWorker checks the
+// sky every 15 minutes in the background and does the switching; both share one JSON blob, "lw.dj", stored with
 // @capacitor/preferences (the native side reads it from SharedPreferences "CapacitorStorage").
+// In a browser, "lw.dj" lives in localStorage, Spotify sends you back to this page's own address, and the
+// switching (djWebCheck below, the same rules as the worker) runs while the page is open.
 
 // Scott's Spotify developer app (a Client ID is public; there is no secret with PKCE).
 const DJ_CLIENT_ID = "eb808675c00945109229536e4b636184";
-const DJ_REDIRECT = "com.scotterotty.localweather://spotify";
+const DJ_NATIVE = !!window.Capacitor?.isNativePlatform?.();
+// Each redirect has to be listed in the Spotify developer app. The web one is this page's address without
+// "index.html" or the query, e.g. https://scotterotty.github.io/local-weather/
+const DJ_REDIRECT = DJ_NATIVE ? "com.scotterotty.localweather://spotify" : location.origin + location.pathname.replace(/index\.html$/, "");
 const DJ_SCOPES = "user-read-playback-state user-modify-playback-state";
-const djPrefs = () => window.Capacitor?.isNativePlatform?.() ? window.Capacitor.Plugins?.Preferences : null;
+// Same get/set/remove shape as @capacitor/preferences, backed by localStorage in a browser.
+const djWebPrefs = {
+  async get({ key }) { try { return { value: localStorage.getItem(key) }; } catch { return { value: null }; } },
+  async set({ key, value }) { try { localStorage.setItem(key, value); } catch { } },
+  async remove({ key }) { try { localStorage.removeItem(key); } catch { } }
+};
+const djPrefs = () => DJ_NATIVE ? window.Capacitor.Plugins?.Preferences : djWebPrefs;
 let djMsg = "";   // last status/error line shown under the buttons
 
 async function djLoad() {
@@ -38,7 +49,7 @@ async function djConnect() {
   await djSave({ verifier, state });
   const q = new URLSearchParams({ response_type: "code", client_id: dj.clientId, scope: DJ_SCOPES, redirect_uri: DJ_REDIRECT,
     code_challenge_method: "S256", code_challenge: challenge, state });
-  location.href = `https://accounts.spotify.com/authorize?${q}`;   // opens in the phone's browser, comes back via the redirect
+  location.href = `https://accounts.spotify.com/authorize?${q}`;   // app: opens the phone's browser, comes back via the redirect; web: comes back to this page
 }
 
 async function tokenRequest(body) {
@@ -50,7 +61,7 @@ async function tokenRequest(body) {
   return j;
 }
 
-// The Android app saves the redirect's ?code= here when Spotify sends you back.
+// The Android app saves the redirect's ?code= here when Spotify sends you back. On the web, djCatchRedirect does.
 async function djFinishSignIn() {
   const p = djPrefs();
   if (!p) return;
@@ -231,7 +242,7 @@ async function djPause() {
   setTimeout(renderDJ, 600);
 }
 
-async function djStop() { await djSave({ on: false, next: null }); djMsg = "Weather DJ is off. Your music keeps playing."; renderDJ(); }
+async function djStop() { clearTimeout(djSwitchTimer); await djSave({ on: false, next: null }); djMsg = "Weather DJ is off. Your music keeps playing."; renderDJ(); }
 async function djForget() { const p = djPrefs(); await p.remove({ key: "lw.dj" }); djMsg = ""; renderDJ(); }
 
 // ---------- UI (inside the Soundtrack panel) ----------
@@ -256,7 +267,7 @@ async function renderDJ() {
     body = `<p>Connect your Spotify account so the Weather DJ can pick and switch playlists.</p>
       <div class="dj-row"><button type="button" class="dj-go" id="djConnect">Connect Spotify</button></div>`;
   } else if (!dj.on) {
-    body = `<p>Plays a playlist for the weather right now on your phone's Spotify, and switches it when the sky changes (after the song that's playing ends).</p>
+    body = `<p>Plays a playlist for the weather right now on your ${DJ_NATIVE ? "phone's " : ""}Spotify, and switches it when the sky changes (after the song that's playing ends).${DJ_NATIVE ? "" : " In a browser it switches while Sunnyloha is open."}</p>
       <div class="dj-row"><button type="button" class="dj-go" id="djStart">Start Weather DJ</button><button type="button" id="djForget">Disconnect</button></div>`;
   } else {
     const p = await spotify("GET", "/me/player").catch(() => undefined);   // undefined = couldn't reach Spotify
@@ -265,7 +276,7 @@ async function renderDJ() {
     // or the background switcher would stop recognizing the music that's playing.
     if (!playing && p !== undefined) dj = await djRefreshPick(dj);
     const id = (dj.context || "").split(":").pop();
-    body = `<p><b>On.</b> ${playing ? "Playing" : "Ready to play"} <b>${esc(dj.playlistName || "a weather playlist")}</b> for ${esc(SKY_NOW[dj.sky] || "the weather right now")}${dj.part ? (dj.part === "night" ? " tonight" : ` this ${esc(dj.part)}`) : ""}.${playing && p.item ? ` Now: ${esc(p.item.name)} · ${esc((p.item.artists || []).map((a) => a.name).join(", "))}.` : ""} Changes with the weather and with the time of day (morning, afternoon, evening, night), after the song that's playing.</p>
+    body = `<p><b>On.</b> ${playing ? "Playing" : "Ready to play"} <b>${esc(dj.playlistName || "a weather playlist")}</b> for ${esc(SKY_NOW[dj.sky] || "the weather right now")}${dj.part ? (dj.part === "night" ? " tonight" : ` this ${esc(dj.part)}`) : ""}.${playing && p.item ? ` Now: ${esc(p.item.name)} · ${esc((p.item.artists || []).map((a) => a.name).join(", "))}.` : ""} Changes with the weather and with the time of day (morning, afternoon, evening, night), after the song that's playing${DJ_NATIVE ? "" : ", while this page is open"}.</p>
       ${dj.lastCheck ? `<p class="hint">Last check ${esc(fmtTime(new Date(dj.lastCheck.at)))}${dj.lastCheck.sky ? `: ${esc(SKY_WORD[dj.lastCheck.sky] || dj.lastCheck.sky)}` : ""}, ${esc(dj.lastCheck.what)}.</p>` : ""}
       <div class="dj-row">${playing ? `<button type="button" class="dj-go dj-pp" id="djPause">${DJ_ICON.pause}Pause</button>` : `<button type="button" class="dj-go dj-pp" id="djPlay">${DJ_ICON.play}Play</button>`}<button type="button" id="djStart">New playlist</button><button type="button" id="djStop">Turn off</button></div>
       ${id ? `<p class="hint"><a href="https://open.spotify.com/playlist/${esc(id)}" target="_blank" rel="noopener">Open this playlist in Spotify</a> to follow or save it.</p>` : ""}`;
@@ -283,13 +294,75 @@ async function renderDJ() {
 function mountDJ() {
   const slot = $("djSlot");
   if (!slot) return;
-  if (!djPrefs()) { slot.remove(); return; }   // needs the Android app (sign-in comes back to the app)
   slot.outerHTML = `<div class="dj" id="dj"></div>`;
   renderDJ();
 }
 
-if (djPrefs()) {
-  djFinishSignIn();
-  window.addEventListener("spotifyAuth", djFinishSignIn);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) { djFinishSignIn(); if (djWake) finishWake(); renderDJ(); } });
+// ---------- web only: sign-in return and switching while the page is open ----------
+// Spotify sends the browser back to this page with ?code=…&state=… (or ?error=…). Save it the same way the Android
+// app does, tidy the address, and show the Music tab.
+function djCatchRedirect() {
+  const q = new URLSearchParams(location.search);
+  if (!q.has("state") || !(q.has("code") || q.has("error"))) return;
+  const auth = { code: q.get("code"), state: q.get("state"), error: q.get("error") };
+  try { localStorage.setItem("lw.djAuth", JSON.stringify(auth)); } catch { }
+  history.replaceState(null, "", location.pathname + "#music");
+  if (typeof setTab === "function") setTab("music");
 }
+
+// Same rules as SpotifyDjWorker.check()/doSwitch(): only while the DJ's own playlist is playing; a new part of the
+// day or rain/snow/storms starting or stopping switches at the end of this song; other sky changes must show up on
+// two checks in a row. Uses the observed conditions on screen (never forecast chances).
+let djSwitchTimer = 0;
+const djWet = (s) => s === "rain" || s === "snow" || s === "storm";
+const djLog = (sky, what) => djSave({ lastCheck: { at: Date.now(), sky, what } });
+async function djWebCheck() {
+  let dj = await djLoad();
+  if (!dj.on || !dj.refresh || !lastData) return;
+  const p = await spotify("GET", "/me/player").catch(() => undefined);
+  if (p === undefined) return;   // couldn't reach Spotify: try again next time
+  const ours = !!(p && p.is_playing && p.context?.uri === dj.context);
+  const { sky, part } = moodNow();
+  const newPart = part !== dj.part;
+  if (sky === dj.sky && !newPart) { await djSave({ pending: null }); return djLog(sky, "same as before, no change"); }
+  const why = newPart ? `it's now ${part === "night" ? "night" : "the " + part}` : "conditions changed";
+  if (!ours) {
+    await djRefreshPick(dj);
+    dj = await djLoad();
+    return djLog(sky, `${why}; nothing playing, so the next Play uses ${dj.playlistName || "a new playlist"}`);
+  }
+  const sure = newPart || djWet(sky) || djWet(dj.sky);
+  if (!sure && dj.pending !== sky) { await djSave({ pending: sky }); return djLog(sky, "conditions changed; confirming on the next check"); }
+  const left = (p.item?.duration_ms || 0) - (p.progress_ms || 0) - 1500;
+  if (dj.next && dj.next.sky === sky && dj.next.part === part) return djScheduleSwitch(left);   // already lined up (timer lost on reload)
+  const pl = await pickFor(dj, sky, part, dj.context).catch(() => null);
+  if (!pl) return djLog(sky, `${why}, but no playlist found`);
+  await djSave({ next: { uri: pl.uri, name: pl.name, sky, part, track: p.item?.id || "" }, pending: null });
+  await djLog(sky, `${why}; switching to ${pl.name} when this song ends`);
+  djScheduleSwitch(left);
+  renderDJ();
+}
+function djScheduleSwitch(ms) { clearTimeout(djSwitchTimer); djSwitchTimer = setTimeout(djWebSwitch, Math.max(0, ms)); }
+async function djWebSwitch() {
+  const dj = await djLoad(), next = dj.next;
+  if (!dj.on || !next) return;
+  const p = await spotify("GET", "/me/player").catch(() => null);
+  if (!(p && p.is_playing && p.context?.uri === dj.context)) { await djSave({ next: null }); return djLog(next.sky, "switch skipped: music was paused or changed"); }   // leave your music alone
+  const left = (p.item?.duration_ms || 0) - (p.progress_ms || 0);
+  if (p.item && p.item.id === next.track && left > 4000) return djScheduleSwitch(left - 1500);   // same song still going: wait for its end
+  try {
+    await spotify("PUT", "/me/player/play", { context_uri: next.uri });
+    spotify("PUT", "/me/player/shuffle?state=true").catch(() => {});
+    await djSave({ context: next.uri, playlistName: next.name, sky: next.sky, part: next.part, mood: `${next.sky}/${next.part}`, next: null });
+    await djLog(next.sky, `switched to ${next.name}`);
+  } catch (e) { djMsg = e.message; }
+  renderDJ();
+}
+
+if (!DJ_NATIVE) {
+  djCatchRedirect();
+  setInterval(() => { djWebCheck().catch(() => {}); }, 5 * 6e4);   // every 5 minutes while the page is open
+}
+djFinishSignIn();
+window.addEventListener("spotifyAuth", djFinishSignIn);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { djFinishSignIn(); if (djWake) finishWake(); renderDJ(); if (!DJ_NATIVE) djWebCheck().catch(() => {}); } });

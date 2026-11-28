@@ -7,6 +7,10 @@
 <title>Sunnyloha</title>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sunnyloha">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="fonts/fonts.css">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
@@ -1421,7 +1425,7 @@ function openLook() {
     ${FONT_GROUPS.map((g) => `<optgroup label="${g}">${FONT_LIST.filter((f) => f.group === g && (!bodyOnly || f.text)).map((f) => `<option value="${f.id}"${val === f.id ? " selected" : ""}>${f.label}</option>`).join("")}</optgroup>`).join("")}`;
   const prev = (id, sample) => { const f = id === "body" ? fontById(look.body) : fontById(id); return `<div class="font-prev" style="font-family:${f ? fam(f).replace(/"/g, "&quot;") : "var(--body)"}">${sample}</div>`; };
   $("explainBody").innerHTML = `
-    <div><h3 id="explainTitle">Settings</h3><div class="aka">Saved on this phone.</div></div>
+    <div><h3 id="explainTitle">Settings</h3><div class="aka">Saved on this ${IS_NATIVE ? "phone" : "device"}.</div></div>
     <section class="look-sec"><h4>Units</h4><div class="chips">
       ${[["F", "°F, mph, inches"], ["C", "°C, km/h, mm"]].map(([id, l]) => chip(`data-units="${id}"`, l, units === id, true)).join("")}
     </div></section>
@@ -1447,7 +1451,9 @@ function openLook() {
       </div>
     </section>
     <section class="look-sec"><h4>Words</h4><p style="margin:0">${termBtn("all", "What do all these words mean?")}</p></section>
+    ${installHtml()}
     <button type="button" class="close" id="explainClose">Done</button>`;
+  $("installBtn")?.addEventListener("click", async () => { const p = installPrompt; installPrompt = null; if (p) { p.prompt(); await p.userChoice.catch(() => {}); } openLook(); });
   $("explainClose").onclick = () => $("explain").close();
   $("explainBody").querySelectorAll("[data-units]").forEach((b) => (b.onclick = () => {
     units = b.dataset.units; store.set(LS.units, units); shareWithWidget(); render(); openLook();
@@ -1729,6 +1735,28 @@ function reviveCache() {
 
 $("lookBtn").addEventListener("click", openLook);
 applyLook();
+
+// ---------- web app install + offline ----------
+// In a browser, Sunnyloha installs like an app (its own icon and window) and opens with no connection,
+// showing the last forecast it saved. The Android app has its own icon and a widget, so none of this shows there.
+const IS_NATIVE = !!window.Capacitor?.isNativePlatform?.();
+const installed = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+let installPrompt = null;
+addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installPrompt = e; });
+addEventListener("appinstalled", () => { installPrompt = null; });
+function installHtml() {
+  if (IS_NATIVE) return "";
+  const apk = `<p class="sub-h">Want the home-screen widget? It's in the <a href="https://github.com/Scotterotty/local-weather/releases/download/android-latest/local-weather.apk">Android app</a>. Everything else works right here.</p>`;
+  if (installed()) return `<section class="look-sec"><h4>App</h4><p style="margin:0">Installed. It opens in its own window and works offline with the last forecast.</p>${apk}</section>`;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const how = installPrompt
+    ? `<p style="margin:0"><button type="button" class="chip plain" id="installBtn">Install Sunnyloha</button></p>`
+    : `<p style="margin:0">${ios ? "In Safari, tap Share, then <b>Add to Home Screen</b>." : "Use your browser's menu: <b>Install app</b> or <b>Add to Home screen</b>."}</p>`;
+  return `<section class="look-sec"><h4>App</h4>${how}<p class="sub-h">Gets its own icon and window, and opens with no connection using the last forecast.</p>${apk}</section>`;
+}
+if (!IS_NATIVE && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
 // ---------- tabs ----------
 // The tab lives in the address (#sky, #learn, #music) so the phone's back button goes back to the last tab.
 // The Android/iOS app leaves out the Chores tab (and its slide-out Weather panel); the web version keeps it.

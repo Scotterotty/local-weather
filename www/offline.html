@@ -22,8 +22,10 @@ button { font: 600 1rem "Inter", system-ui, sans-serif; color: var(--fg); backgr
   <button type="button" id="retry">Try again</button>
 </main>
 <script>
-document.getElementById("retry").addEventListener("click", () => { location.href = "https://scotterotty.github.io/local-weather/"; });
-window.addEventListener("online", () => { location.href = "https://scotterotty.github.io/local-weather/"; });
+// The Android app shows this page from its own files, so it goes back to the live site; a browser goes back to this site.
+const home = window.Capacitor ? "https://scotterotty.github.io/local-weather/" : new URL("./", location.href).href;
+document.getElementById("retry").addEventListener("click", () => { location.href = home; });
+window.addEventListener("online", () => { location.href = home; });
 </script>
 </body>
 </html>
