@@ -294,7 +294,7 @@ public class WidgetUpdateWorker extends Worker {
                         if (t != null && when != null && System.currentTimeMillis() - when.getTime() <= OBS_MAX_AGE_MS) {
                             s.tempC = t;
                             String d = o.optString("textDescription");
-                            if (!d.isEmpty()) s.desc = d;
+                            if (!d.isEmpty()) s.desc = skyWords(d, h0.optString("shortForecast"));
                             s.station = id;
                             Double rh = num(o, "relativeHumidity"), ws = num(o, "windSpeed"), wd = num(o, "windDirection");
                             if (rh != null) s.humidity = rh;
@@ -390,6 +390,24 @@ public class WidgetUpdateWorker extends Worker {
             if (s.note == null && pop >= 40) s.note = nowcast(hd, pop, t);
         }
         return s;
+    }
+
+    // Same rule as skyWords() in the app: airport cloud sensors only reach about 12,000 ft, so when the station
+    // says clear/mostly clear/partly cloudy but this hour's forecast says mostly cloudy or cloudy, the forecast wins.
+    // Rain, snow, storms and fog from the station always win.
+    static int cloudRank(String desc) {
+        String d = desc == null ? "" : desc.toLowerCase(Locale.US);
+        if (d.matches(".*(thunder|t-storm|snow|sleet|flurr|ice|freezing|rain|shower|drizzle|fog|haze|smoke|mist|dust).*")) return -1;
+        if (d.matches("(cloudy|.*(overcast|mostly cloudy|considerable cloud)).*")) return 3;
+        if (d.matches(".*(partly|partial|scattered clouds).*")) return 2;
+        if (d.matches(".*(mostly sunny|mostly clear|mainly clear|few clouds).*")) return 1;
+        if (d.matches(".*(sunny|clear|fair).*")) return 0;
+        return -1;
+    }
+
+    static String skyWords(String obsDesc, String fcDesc) {
+        int o = cloudRank(obsDesc), f = cloudRank(fcDesc);
+        return (o == -1 || o == 3 || f != 3) ? obsDesc : fcDesc;
     }
 
     // ---------- conditions: one word for the sky, an emoji, and a background ----------
