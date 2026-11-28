@@ -159,34 +159,59 @@ function bearing(a, b, c, d) {
   return (Math.atan2(y, x) / RAD + 360) % 360;
 }
 
-const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
-function overpassQuery(lat, lon) {
-  const a = (km) => `(around:${km * 1000},${lat.toFixed(4)},${lon.toFixed(4)})`;
-  return `[out:json][timeout:40];
-(node["place"="city"]${a(150)};node["place"="town"]${a(70)};);out body;
-(
-  nwr["boundary"="national_park"]${a(90)};
-  nwr["leisure"="nature_reserve"]["name"]${a(80)};
-  nwr["boundary"="protected_area"]["name"]${a(80)};
-  nwr["leisure"="park"]["name"]["park:type"]${a(80)};
-  nwr["man_made"="observatory"]["name"]${a(90)};
-  nwr["tourism"="viewpoint"]["name"]${a(50)};
-)->.s;
-node.s out body;
-(way.s;relation.s;);out tags center bb;`;
+const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
+// A box around a point, as Overpass wants it: south,west,north,east.
+function bboxAround(lat, lon, km) {
+  const dLat = km / 111.2, dLon = km / (111.2 * Math.max(0.1, Math.cos(lat * RAD)));
+  return [lat - dLat, lon - dLon, lat + dLat, lon + dLon].map((n) => n.toFixed(4)).join(",");
 }
+// Bounding boxes use the server's spatial index, so they're fast even for huge forests and parks.
+// "around:" has to measure the distance to every edge of every big area, which used to make this
+// query run past the server's time limit. We trim to the real distance on the phone instead.
+function overpassQuery(lat, lon) {
+  const b = (km) => `(${bboxAround(lat, lon, km)})`;
+  return `[out:json][timeout:90];
+node["place"~"^(city|town)$"]${b(150)};out body qt;
+(
+  nwr["boundary"="national_park"]${b(90)};
+  nwr["leisure"="nature_reserve"]["name"]${b(80)};
+  nwr["boundary"="protected_area"]["name"]${b(80)};
+  nwr["leisure"="park"]["name"]["park:type"]${b(80)};
+  nwr["man_made"="observatory"]["name"]${b(90)};
+  nwr["tourism"="viewpoint"]["name"]${b(50)};
+)->.s;
+node.s out body qt;
+(way.s;relation.s;);out tags center bb qt;`;
+}
+// Ask the first server; if it hasn't answered in a few seconds (busy or rate-limited), ask the next
+// one too, and take whichever good answer comes back first.
 async function overpass(q) {
-  let err;
-  for (const url of OVERPASS) {
+  const ctls = [], errs = [];
+  const ask = async (url) => {
+    const ctl = new AbortController(); ctls.push(ctl);
+    const timer = setTimeout(() => ctl.abort(), 100000);
     try {
-      const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 45000);
       const r = await fetch(url, { method: "POST", body: new URLSearchParams({ data: q }), signal: ctl.signal });
-      clearTimeout(timer);
-      if (r.ok) return r.json();
-      err = new Error(`${r.status} from ${new URL(url).host}`);
-    } catch (e) { err = e; }
-  }
-  throw err;
+      if (!r.ok) throw new Error(`${r.status} from ${new URL(url).host}`);
+      const d = await r.json();
+      if (/error|timed out|out of memory/i.test(d.remark || "")) throw new Error(d.remark);   // a partial answer would look falsely dark
+      return d;
+    } finally { clearTimeout(timer); }
+  };
+  let done = false, wait;
+  try {
+    return await new Promise((resolve, reject) => {
+      let left = OVERPASS.length, next = 0;
+      const fail = (e) => { errs.push(e); launch(); if (--left === 0) reject(errs[0]); };
+      const launch = () => {
+        clearTimeout(wait);
+        if (done || next >= OVERPASS.length) return;
+        ask(OVERPASS[next++]).then(resolve, fail);
+        wait = setTimeout(launch, 8000);
+      };
+      launch();
+    });
+  } finally { done = true; clearTimeout(wait); ctls.forEach((c) => c.abort()); }
 }
 const titleCase = (s) => String(s).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 function spotKind(tg) {
@@ -198,6 +223,11 @@ function spotKind(tg) {
   if (tg.leisure === "nature_reserve") return "Nature reserve";
   return "Protected land";
 }
+// Is any part of a big area's box within km of the point? (A forest's center can be far off while its edge is close.)
+function boxNear(b, lat, lon, km) {
+  const cLat = Math.min(Math.max(lat, b.minlat), b.maxlat), cLon = Math.min(Math.max(lon, b.minlon), b.maxlon);
+  return kmBetween(lat, lon, cLat, cLon) <= km;
+}
 const parsePop = (s) => { const n = parseInt(String(s || "").replace(/[\s,.]/g, ""), 10); return isNaN(n) ? null : n; };
 
 async function loadDarkSpots(lat, lon) {
@@ -205,12 +235,14 @@ async function loadDarkSpots(lat, lon) {
   const cached = store.get(ck);
   if (cached && Date.now() - cached.at < 30 * 864e5) return cached.v;
   const d = await overpass(overpassQuery(lat, lon));
-  if (/error|timed out/i.test(d.remark || "")) throw new Error(d.remark);      // a partial answer would look falsely dark
+  const maxKm = (tg) => tg.place === "city" ? 150 : tg.place === "town" ? 70 : tg.tourism === "viewpoint" ? 50
+    : tg.boundary === "national_park" || tg.man_made === "observatory" ? 90 : 80;
   const towns = [], cands = [];
   for (const e of d.elements || []) {
     const tg = e.tags || {};
     const p = e.lat != null ? { lat: e.lat, lon: e.lon } : e.center;
     if (!p) continue;
+    if (kmBetween(lat, lon, p.lat, p.lon) > maxKm(tg) && !(e.bounds && boxNear(e.bounds, lat, lon, maxKm(tg)))) continue;
     if (tg.place === "city" || tg.place === "town") { towns.push({ lat: p.lat, lon: p.lon, pop: parsePop(tg.population) || (tg.place === "city" ? 50000 : 8000) }); continue; }
     if (!tg.name || /private/.test(tg.access || "")) continue;
     let km2 = 0;
